@@ -2,7 +2,9 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 
+import MobileNav from "./components/layout/MobileNav";
 import Admin from "./pages/Admin";
+import Analytics from "./pages/Analytics";
 import Casino from "./pages/Casino";
 import History from "./pages/History";
 import KYC from "./pages/KYC";
@@ -26,8 +28,10 @@ function App() {
         <Route path="/casino" element={<Casino />} />
         <Route path="/promotions" element={<Promotions />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route path="/analytics" element={<Analytics />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+      <MobileNav />
     </BrowserRouter>
   );
 }

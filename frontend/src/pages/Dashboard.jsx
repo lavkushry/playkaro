@@ -48,6 +48,9 @@ export default function Dashboard() {
             <Button variant="secondary" onClick={() => navigate("/leaderboard")}>
               Leaderboard
             </Button>
+            <Button variant="secondary" onClick={() => navigate("/analytics")}>
+              Analytics
+            </Button>
             <Button variant="secondary" onClick={() => navigate("/history")}>
               History
             </Button>

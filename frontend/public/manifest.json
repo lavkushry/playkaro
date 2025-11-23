@@ -1,0 +1,48 @@
+{
+  "name": "PlayKaro - Real Money Gaming",
+  "short_name": "PlayKaro",
+  "description": "Premier Real-Money Gaming Platform - Sports Betting, Live Casino, Slots & More",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#F59E0B",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot1.png",
+      "sizes": "1280x720",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["games", "entertainment", "sports"],
+  "shortcuts": [
+    {
+      "name": "Sportsbook",
+      "short_name": "Sports",
+      "description": "View live sports betting odds",
+      "url": "/sportsbook",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Casino",
+      "short_name": "Casino",
+      "description": "Play live casino games",
+      "url": "/casino",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
