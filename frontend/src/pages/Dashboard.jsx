@@ -39,6 +39,9 @@ export default function Dashboard() {
             <Button variant="secondary" onClick={() => navigate("/sportsbook")}>
               Sportsbook
             </Button>
+            <Button variant="secondary" onClick={() => navigate("/casino")}>
+              Casino
+            </Button>
             <Button variant="secondary" onClick={() => navigate("/history")}>
               History
             </Button>

@@ -107,6 +107,22 @@ func main() {
 		adminKYCGroup.POST("/approve", handlers.ApproveKYC)
 	}
 
+	// Casino/Game Routes
+	casinoGroup := r.Group("/api/v1/casino")
+	{
+		casinoGroup.GET("/games", handlers.GetGames) // Public
+		casinoGroup.GET("/launch", middleware.AuthMiddleware(), handlers.LaunchGame)
+	}
+
+	// Seamless Wallet API (for game providers)
+	walletAPIGroup := r.Group("/api/v1/game-wallet")
+	{
+		walletAPIGroup.POST("/balance", handlers.GetBalanceForProvider)
+		walletAPIGroup.POST("/debit", handlers.DebitWallet)
+		walletAPIGroup.POST("/credit", handlers.CreditWallet)
+		walletAPIGroup.POST("/rollback", handlers.RollbackWallet)
+	}
+
 	// Public Routes
 	r.GET("/api/v1/matches", handlers.GetMatches)
 	r.GET("/ws", realtime.ServeWS)

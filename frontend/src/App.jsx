@@ -3,6 +3,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 
 import Admin from "./pages/Admin";
+import Casino from "./pages/Casino";
 import History from "./pages/History";
 import KYC from "./pages/KYC";
 import Payment from "./pages/Payment";
@@ -20,6 +21,7 @@ function App() {
         <Route path="/history" element={<History />} />
         <Route path="/payment" element={<Payment />} />
         <Route path="/kyc" element={<KYC />} />
+        <Route path="/casino" element={<Casino />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
