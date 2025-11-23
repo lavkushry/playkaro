@@ -1,4 +1,6 @@
+import { ApolloProvider } from "@apollo/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { apolloClient } from "./apolloClient";
 import Chat from "./components/features/Chat";
 import MobileNav from "./components/layout/MobileNav";
 import Admin from "./pages/Admin";
@@ -16,25 +18,27 @@ import Sportsbook from "./pages/Sportsbook";
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/sportsbook" element={<Sportsbook />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/payment" element={<Payment />} />
-        <Route path="/kyc" element={<KYC />} />
-        <Route path="/casino" element={<Casino />} />
-        <Route path="/promotions" element={<Promotions />} />
-        <Route path="/leaderboard" element={<Leaderboard />} />
-        <Route path="/analytics" element={<Analytics />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-      <Chat />
-      <MobileNav />
-    </BrowserRouter>
+    <ApolloProvider client={apolloClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/sportsbook" element={<Sportsbook />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/payment" element={<Payment />} />
+          <Route path="/kyc" element={<KYC />} />
+          <Route path="/casino" element={<Casino />} />
+          <Route path="/promotions" element={<Promotions />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/" element={<Navigate to="/dashboard" />} />
+        </Routes>
+        <Chat />
+        <MobileNav />
+      </BrowserRouter>
+    </ApolloProvider>
   );
 }
 

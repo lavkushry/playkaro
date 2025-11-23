@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/playkaro/backend/internal/db"
 	pb "github.com/playkaro/backend/proto/wallet"
 	"google.golang.org/grpc"
@@ -125,6 +126,11 @@ func (s *server) Withdraw(ctx context.Context, req *pb.WithdrawRequest) (*pb.Wit
 }
 
 func main() {
+	// Load .env file
+	if err := godotenv.Load(".env"); err != nil {
+		log.Println("No .env file found")
+	}
+
 	// Initialize DB connection
 	db.Connect()
 
