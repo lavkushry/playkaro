@@ -164,6 +164,29 @@ func InitSchema() {
 	('pragmatic-sweet-bonanza', 'PRAGMATIC', 'Sweet Bonanza', 'SLOT', 'https://picsum.photos/seed/bonanza/300/200', 5, 2000, 96.48),
 	('ezugi-baccarat', 'EZUGI', 'Live Baccarat', 'LIVE_CASINO', 'https://picsum.photos/seed/baccarat/300/200', 25, 10000, 98.94)
 	ON CONFLICT (id) DO NOTHING;
+
+	CREATE TABLE IF NOT EXISTS bonuses (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		type VARCHAR(50) NOT NULL,
+		amount DECIMAL(15, 2) NOT NULL,
+		wagering_requirement DECIMAL(15, 2) NOT NULL,
+		wagered DECIMAL(15, 2) DEFAULT 0,
+		status VARCHAR(20) DEFAULT 'ACTIVE',
+		expires_at TIMESTAMP,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS referrals (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		referrer_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		referred_id UUID REFERENCES users(id) ON DELETE SET NULL,
+		code VARCHAR(20) UNIQUE NOT NULL,
+		bonus_awarded DECIMAL(15, 2) DEFAULT 0,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	ALTER TABLE wallets ADD COLUMN IF NOT EXISTS bonus DECIMAL(15, 2) DEFAULT 0;
 	`
 
 	_, err := DB.Exec(schema)

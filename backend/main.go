@@ -123,6 +123,17 @@ func main() {
 		walletAPIGroup.POST("/rollback", handlers.RollbackWallet)
 	}
 
+	// Promotions Routes
+	promoGroup := r.Group("/api/v1/promotions")
+	promoGroup.Use(middleware.AuthMiddleware())
+	{
+		promoGroup.GET("/bonuses", handlers.GetBonuses)
+		promoGroup.POST("/claim", handlers.ClaimBonus)
+		promoGroup.POST("/referral/generate", handlers.GenerateReferralCode)
+		promoGroup.POST("/referral/apply", handlers.ApplyReferralCode)
+		promoGroup.GET("/leaderboard", handlers.GetLeaderboard)
+	}
+
 	// Public Routes
 	r.GET("/api/v1/matches", handlers.GetMatches)
 	r.GET("/ws", realtime.ServeWS)

@@ -6,7 +6,9 @@ import Admin from "./pages/Admin";
 import Casino from "./pages/Casino";
 import History from "./pages/History";
 import KYC from "./pages/KYC";
+import Leaderboard from "./pages/Leaderboard";
 import Payment from "./pages/Payment";
+import Promotions from "./pages/Promotions";
 import Sportsbook from "./pages/Sportsbook";
 
 function App() {
@@ -22,6 +24,8 @@ function App() {
         <Route path="/payment" element={<Payment />} />
         <Route path="/kyc" element={<KYC />} />
         <Route path="/casino" element={<Casino />} />
+        <Route path="/promotions" element={<Promotions />} />
+        <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
