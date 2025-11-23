@@ -4,8 +4,11 @@ import (
 	"log"
 	"os"
 
+	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/playkaro/backend/graph"
 	"github.com/playkaro/backend/internal/db"
 	"github.com/playkaro/backend/internal/handlers"
 	"github.com/playkaro/backend/internal/middleware"
@@ -137,6 +140,15 @@ func main() {
 	// Public Routes
 	r.GET("/api/v1/matches", handlers.GetMatches)
 	r.GET("/ws", realtime.ServeWS)
+
+	// GraphQL Routes
+	srv := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}))
+	r.POST("/query", func(c *gin.Context) {
+		srv.ServeHTTP(c.Writer, c.Request)
+	})
+	r.GET("/playground", func(c *gin.Context) {
+		playground.Handler("GraphQL", "/query").ServeHTTP(c.Writer, c.Request)
+	})
 
 	// Start Real-time Simulation
 	realtime.StartOddsSimulation()
