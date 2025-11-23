@@ -1,0 +1,44 @@
+type User {
+  id: ID!
+  username: String!
+  email: String!
+  mobile: String
+  kycLevel: Int!
+  wallet: Wallet
+}
+
+type Wallet {
+  id: ID!
+  balance: Float!
+  currency: String!
+  bonus: Float!
+}
+
+type Match {
+  id: ID!
+  teamA: String!
+  teamB: String!
+  startTime: String!
+  status: String!
+  oddsTeamA: Float!
+  oddsTeamB: Float!
+  oddsDraw: Float!
+}
+
+type AuthPayload {
+  token: String!
+  user: User!
+}
+
+type Query {
+  me: User
+  balance: Wallet
+  matches: [Match!]!
+  match(id: ID!): Match
+}
+
+type Mutation {
+  login(email: String!, password: String!): AuthPayload!
+  register(username: String!, email: String!, password: String!, mobile: String!): AuthPayload!
+  placeBet(matchId: ID!, selection: String!, amount: Float!): Boolean!
+}
