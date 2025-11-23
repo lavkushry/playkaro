@@ -26,6 +26,7 @@ func main() {
 
 	// Initialize Database
 	db.Connect()
+	db.ConnectRedis()
 
 	// Initialize Router
 	r := gin.Default()

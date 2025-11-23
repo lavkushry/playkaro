@@ -1,12 +1,15 @@
 package realtime
 
 import (
+	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/playkaro/backend/internal/db"
 )
 
 // Message types
@@ -112,7 +115,38 @@ func newHub() *Hub {
 
 var MainHub = newHub()
 
+// Broadcast sends a message to all connected clients via Redis Pub/Sub
+func (h *Hub) Broadcast(message WSMessage) {
+	jsonMsg, _ := json.Marshal(message)
+	db.RDB.Publish(context.Background(), "broadcast_channel", jsonMsg)
+}
+
 func (h *Hub) Run() {
+	// Subscribe to Redis channel
+	pubsub := db.RDB.Subscribe(context.Background(), "broadcast_channel")
+	ch := pubsub.Channel()
+
+	// Goroutine to handle incoming Redis messages
+	go func() {
+		for msg := range ch {
+			var wsMsg WSMessage
+			if err := json.Unmarshal([]byte(msg.Payload), &wsMsg); err != nil {
+				log.Printf("Error unmarshalling redis message: %v", err)
+				continue
+			}
+
+			// Send to all local clients
+			for client := range h.clients {
+				select {
+				case client.send <- wsMsg:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
+		}
+	}()
+
 	for {
 		select {
 		case client := <-h.register:
@@ -122,15 +156,7 @@ func (h *Hub) Run() {
 				delete(h.clients, client)
 				close(client.send)
 			}
-		case message := <-h.broadcast:
-			for client := range h.clients {
-				select {
-				case client.send <- message:
-				default:
-					close(client.send)
-					delete(h.clients, client)
-				}
-			}
+		// Removed direct broadcast case, handled by Redis goroutine above
 		}
 	}
 }
@@ -151,11 +177,6 @@ func ServeWS(c *gin.Context) {
 	go client.readPump()
 }
 
-// Broadcast sends a message to all connected clients
-func (h *Hub) Broadcast(message WSMessage) {
-	h.broadcast <- message
-}
-
 // Simulate Odds Updates
 func StartOddsSimulation() {
 	ticker := time.NewTicker(5 * time.Second)
@@ -170,7 +191,7 @@ func StartOddsSimulation() {
 					"odds_b":   1.95,
 				},
 			}
-			MainHub.broadcast <- msg
+			MainHub.Broadcast(msg)
 		}
 	}()
 }
