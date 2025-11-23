@@ -85,16 +85,16 @@ This document outlines the detailed requirements for building a comprehensive Re
 *   **Framework:** Gin or Echo.
 *   **Database:**
     *   **Primary (Relational):** PostgreSQL (User data, Wallets, Transactions).
-    *   **Caching/Session:** Redis (Session management, Live odds cache, Leaderboards).
+    *   **Caching/Session:** DragonflyDB (High-performance Redis alternative).
     *   **TimeSeries (Optional):** InfluxDB for logging betting trends/analytics.
-*   **Message Queue:** Kafka or RabbitMQ (for async bet processing and settlement).
+*   **Message Queue:** Redis Pub/Sub (via DragonflyDB) for real-time events.
 
 ### 4.2 API Architecture
 *   **RESTful API:** For standard CRUD operations (User, Wallet, History).
+*   **GraphQL API:** Single endpoint `/query` for flexible, efficient data fetching.
 *   **WebSocket Server:** For real-time features:
-    *   Pushing live odds updates to clients.
-    *   Notifying users of bet settlement.
-    *   Live chat support (optional).
+    *   Pushing live odds updates to clients (via Redis Pub/Sub).
+    *   Global Chat and User Notifications.
 
 ### 4.3 Key Modules
 
@@ -649,8 +649,8 @@ Logs must be machine-parseable JSON.
 | **Backend** | **Go (Golang)** | High concurrency (Goroutines), low latency, strong typing, fast compile times. Perfect for high-throughput betting engines. | Node.js (Event loop blocking risk), Java (High memory footprint). |
 | **Frontend** | **React + Vite** | Huge ecosystem, component reusability, fast HMR. | Vue (Smaller ecosystem), Angular (Too verbose). |
 | **Database** | **PostgreSQL** | ACID compliance is non-negotiable for financial data. Robust JSONB support for flexible bet metadata. | MySQL (Weaker JSON support), MongoDB (No ACID transactions). |
-| **Cache/PubSub** | **Redis** | Sub-millisecond latency. Essential for "Thundering Herd" protection and live odds. | Memcached (No persistence/PubSub). |
-| **Message Queue** | **Kafka** | High throughput for immutable event logs (Bet Placed, Match Ended). Replayable history. | RabbitMQ (Better for complex routing, but lower throughput). |
+| **Cache/PubSub** | **DragonflyDB** | 25x faster than Redis. Handles millions of ops/sec on a single instance. Drop-in Redis replacement. | Redis (Slower on multi-core), Memcached (No persistence). |
+| **API Layer** | **GraphQL + REST** | GraphQL for complex data fetching (Dashboard), REST for simple CRUD. Best of both worlds. | REST only (Over-fetching), gRPC (Browser compatibility issues). |
 | **Infrastructure** | **Kubernetes** | Standard for container orchestration. Auto-scaling, self-healing. | Docker Swarm (Simpler but less feature-rich), Serverless (Cold starts unacceptable). |
 
 ### 12.2 Development Standards

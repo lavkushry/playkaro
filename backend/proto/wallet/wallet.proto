@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package wallet;
+
+option go_package = "github.com/playkaro/backend/proto/wallet";
+
+service WalletService {
+  rpc GetBalance (GetBalanceRequest) returns (GetBalanceResponse);
+  rpc Deposit (DepositRequest) returns (DepositResponse);
+  rpc Withdraw (WithdrawRequest) returns (WithdrawResponse);
+}
+
+message GetBalanceRequest {
+  string user_id = 1;
+}
+
+message GetBalanceResponse {
+  double balance = 1;
+  double bonus = 2;
+  string currency = 3;
+}
+
+message DepositRequest {
+  string user_id = 1;
+  double amount = 2;
+  string method = 3;
+}
+
+message DepositResponse {
+  bool success = 1;
+  string transaction_id = 2;
+  string message = 3;
+  double new_balance = 4;
+}
+
+message WithdrawRequest {
+  string user_id = 1;
+  double amount = 2;
+  string bank_account_id = 3;
+}
+
+message WithdrawResponse {
+  bool success = 1;
+  string transaction_id = 2;
+  string message = 3;
+  double new_balance = 4;
+}

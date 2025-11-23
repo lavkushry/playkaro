@@ -10,6 +10,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/playkaro/backend/graph"
 	"github.com/playkaro/backend/internal/db"
+	"github.com/playkaro/backend/internal/grpc_client"
 	"github.com/playkaro/backend/internal/handlers"
 	"github.com/playkaro/backend/internal/middleware"
 	"github.com/playkaro/backend/internal/realtime"
@@ -27,6 +28,7 @@ func main() {
 	// Initialize Database
 	db.Connect()
 	db.ConnectRedis()
+	grpc_client.InitWalletClient()
 
 	// Initialize Router
 	r := gin.Default()

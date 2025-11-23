@@ -109,7 +109,11 @@ docker-compose up -d
 
 cd ../backend
 docker build -t playkaro-backend .
-docker run -d -p 8080:8080 --env-file .env playkaro-backend
+# Run DragonflyDB (Redis compatible)
+docker run -d --name dragonfly -p 6379:6379 docker.dragonflydb.io/dragonflydb/dragonfly
+
+# Run Backend linked to Dragonfly
+docker run -d -p 8080:8080 --env-file .env --link dragonfly:dragonfly playkaro-backend
 ```
 
 6. **Configure Nginx (Optional)**
@@ -155,6 +159,7 @@ sudo systemctl restart nginx
    - **Start Command**: `cd backend && ./main`
 4. Add environment variables
 5. Add PostgreSQL database (Render provides free tier)
+6. **Redis/DragonflyDB**: Render offers Redis. Use that connection string.
 
 ### Frontend
 

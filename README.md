@@ -46,7 +46,9 @@ A full-stack **Real-Money Gaming (RMG)** platform built with **Go**, **React**, 
 ### Backend
 - **Go** (Gin framework)
 - **PostgreSQL** (ACID-compliant database)
-- **WebSockets** (gorilla/websocket)
+- **DragonflyDB** (High-performance Redis alternative)
+- **GraphQL** (gqlgen) + **REST API**
+- **WebSockets** (Redis Pub/Sub)
 - **JWT** (golang-jwt/jwt)
 
 ### Frontend
@@ -56,7 +58,7 @@ A full-stack **Real-Money Gaming (RMG)** platform built with **Go**, **React**, 
 - **Axios** (HTTP client)
 
 ### Infrastructure
-- **Docker** (PostgreSQL + Redis containers)
+- **Docker** (PostgreSQL + DragonflyDB containers)
 - **Git** (version control)
 
 ---
@@ -165,7 +167,13 @@ GET /api/v1/bets
 ```
 ws://localhost:8080/ws
 ```
-Broadcasts odds updates every 5 seconds
+Broadcasts odds updates via **Redis Pub/Sub** (DragonflyDB)
+
+### GraphQL
+```
+POST http://localhost:8080/query
+```
+Playground available at `/playground`
 
 ---
 
