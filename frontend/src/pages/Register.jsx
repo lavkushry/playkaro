@@ -1,16 +1,32 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
+import { useAuthStore } from "../store/useAuthStore";
 
 export default function Register() {
-  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+  const register = useAuthStore((state) => state.register);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const error = useAuthStore((state) => state.error);
+
+  const [formData, setFormData] = useState({
+    username: "",
+    email: "",
+    mobile: "",
+    password: ""
+  });
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
-    // TODO: Integrate API
-    setTimeout(() => setIsLoading(false), 1000);
+    const success = await register(formData);
+    if (success) {
+      navigate("/dashboard");
+    }
   };
 
   return (
@@ -21,29 +37,47 @@ export default function Register() {
           <p className="mt-2 text-text-secondary">Join the winning team!</p>
         </div>
 
+        {error && (
+          <div className="bg-status-error/10 border border-status-error text-status-error p-3 rounded-lg text-sm text-center">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <Input
             label="Username"
+            name="username"
             type="text"
             placeholder="CoolPunter99"
+            value={formData.username}
+            onChange={handleChange}
             required
           />
           <Input
             label="Email"
+            name="email"
             type="email"
             placeholder="you@example.com"
+            value={formData.email}
+            onChange={handleChange}
             required
           />
           <Input
             label="Mobile Number"
+            name="mobile"
             type="tel"
             placeholder="+91 98765 43210"
+            value={formData.mobile}
+            onChange={handleChange}
             required
           />
           <Input
             label="Password"
+            name="password"
             type="password"
             placeholder="••••••••"
+            value={formData.password}
+            onChange={handleChange}
             required
           />
 

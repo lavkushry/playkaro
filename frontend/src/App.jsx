@@ -6,6 +6,7 @@ import MobileNav from "./components/layout/MobileNav";
 import Admin from "./pages/Admin";
 import Analytics from "./pages/Analytics";
 import Casino from "./pages/Casino";
+import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
 import KYC from "./pages/KYC";
 import Leaderboard from "./pages/Leaderboard";
