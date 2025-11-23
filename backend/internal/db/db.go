@@ -46,6 +46,7 @@ func InitSchema() {
 		email VARCHAR(100) UNIQUE NOT NULL,
 		password_hash TEXT NOT NULL,
 		mobile VARCHAR(20),
+		is_admin BOOLEAN DEFAULT FALSE,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 

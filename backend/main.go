@@ -50,6 +50,24 @@ func main() {
 		betGroup.POST("/", handlers.PlaceBet)
 	}
 
+	// Admin Routes (Protected)
+	adminGroup := r.Group("/api/v1/admin")
+	adminGroup.Use(middleware.AuthMiddleware())
+	adminGroup.Use(middleware.AdminMiddleware())
+	{
+		adminGroup.POST("/matches", handlers.CreateMatch)
+		adminGroup.PUT("/matches/:id/odds", handlers.UpdateMatchOdds)
+		adminGroup.POST("/matches/:id/settle", handlers.SettleMatch)
+	}
+
+	// History Routes (Protected)
+	historyGroup := r.Group("/api/v1")
+	historyGroup.Use(middleware.AuthMiddleware())
+	{
+		historyGroup.GET("/transactions", handlers.GetTransactions)
+		historyGroup.GET("/bets", handlers.GetBets)
+	}
+
 	// Public Routes
 	r.GET("/api/v1/matches", handlers.GetMatches)
 	r.GET("/ws", realtime.ServeWS)

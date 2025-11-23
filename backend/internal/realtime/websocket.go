@@ -78,6 +78,11 @@ func ServeWS(c *gin.Context) {
 	}()
 }
 
+// Broadcast sends a message to all connected clients
+func (h *Hub) Broadcast(message []byte) {
+	h.broadcast <- message
+}
+
 // Simulate Odds Updates
 func StartOddsSimulation() {
 	ticker := time.NewTicker(5 * time.Second)
