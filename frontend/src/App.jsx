@@ -1,7 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-
+import Chat from "./components/features/Chat";
 import MobileNav from "./components/layout/MobileNav";
 import Admin from "./pages/Admin";
 import Analytics from "./pages/Analytics";
@@ -10,8 +8,10 @@ import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
 import KYC from "./pages/KYC";
 import Leaderboard from "./pages/Leaderboard";
+import Login from "./pages/Login";
 import Payment from "./pages/Payment";
 import Promotions from "./pages/Promotions";
+import Register from "./pages/Register";
 import Sportsbook from "./pages/Sportsbook";
 
 function App() {
@@ -32,12 +32,10 @@ function App() {
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+      <Chat />
       <MobileNav />
     </BrowserRouter>
   );
 }
-
-
-
 
 export default App;

@@ -1,138 +1,104 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Button } from "../components/ui/Button";
-import { Input } from "../components/ui/Input";
-import { useBetStore } from "../store/useBetStore";
 import { useWalletStore } from "../store/useWalletStore";
 
 export default function Sportsbook() {
-  const navigate = useNavigate();
-  const { matches, betSlip, fetchMatches, addToBetSlip, updateBetAmount, placeBet, clearBetSlip, connectWebSocket, disconnectWebSocket } = useBetStore();
-  const { balance, fetchBalance } = useWalletStore();
-  const [showBetSlip, setShowBetSlip] = useState(false);
-  const token = localStorage.getItem("token");
+  const [matches, setMatches] = useState([]);
+  const [selectedMatch, setSelectedMatch] = useState(null);
+  const [betAmount, setBetAmount] = useState("");
+  const { balance, updateBalance } = useWalletStore();
 
   useEffect(() => {
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-    fetchMatches();
-    fetchBalance(token);
-    connectWebSocket();
+    // Mock data for now, replace with API call
+    setMatches([
+      {
+        id: "1",
+        teamA: "India",
+        teamB: "Australia",
+        date: "2025-11-24T14:30:00Z",
+        status: "LIVE",
+        markets: [
+          { name: "Match Winner", options: [{ label: "India", odds: 1.85 }, { label: "Australia", odds: 1.95 }] },
+          { name: "Toss Winner", options: [{ label: "India", odds: 1.90 }, { label: "Australia", odds: 1.90 }] },
+          { name: "Total Runs (1st Innings)", options: [{ label: "Over 300.5", odds: 1.85 }, { label: "Under 300.5", odds: 1.85 }] },
+        ]
+      },
+      {
+        id: "2",
+        teamA: "England",
+        teamB: "Pakistan",
+        date: "2025-11-24T18:00:00Z",
+        status: "UPCOMING",
+        markets: [
+          { name: "Match Winner", options: [{ label: "England", odds: 1.60 }, { label: "Pakistan", odds: 2.30 }] },
+        ]
+      }
+    ]);
+  }, []);
 
-    return () => disconnectWebSocket();
-  }, [token, fetchMatches, fetchBalance, connectWebSocket, disconnectWebSocket, navigate]);
+  const placeBet = (matchId, marketName, selection, odds) => {
+    const amount = parseFloat(betAmount);
+    if (!amount || amount <= 0) return alert("Enter valid amount");
+    if (amount > balance) return alert("Insufficient balance");
 
-  useEffect(() => {
-    if (betSlip) setShowBetSlip(true);
-  }, [betSlip]);
-
-  const handlePlaceBet = async () => {
-    try {
-      await placeBet(token);
-      await fetchBalance(token);
-      alert("Bet placed successfully!");
-      setShowBetSlip(false);
-    } catch (err) {
-      alert("Failed to place bet: " + (err.response?.data?.error || err.message));
-    }
+    // Call API to place bet
+    // For now, just update local state
+    alert(`Bet Placed: ₹${amount} on ${selection} (${marketName}) @ ${odds}`);
+    // updateBalance(-amount);
+    setBetAmount("");
+    setSelectedMatch(null);
   };
 
-  const potentialWin = betSlip ? (betSlip.amount * betSlip.odds).toFixed(2) : 0;
-
   return (
-    <div className="min-h-screen bg-primary p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-accent-gold">Sportsbook</h1>
-            <p className="text-text-secondary">Live Matches</p>
-          </div>
-          <div className="flex gap-4 items-center">
-            <div className="text-right">
-              <p className="text-xs text-text-secondary">Balance</p>
-              <p className="text-xl font-bold text-accent-gold">₹{balance.toFixed(2)}</p>
-            </div>
-            <Button variant="outline" onClick={() => navigate("/dashboard")}>
-              Dashboard
-            </Button>
-          </div>
-        </div>
+    <div className="min-h-screen bg-primary p-4 pb-20">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-3xl font-bold text-accent-gold mb-8">Sportsbook</h1>
 
-        {/* Matches Grid */}
-        <div className="grid grid-cols-1 gap-6">
+        {/* Match List */}
+        <div className="space-y-6">
           {matches.map((match) => (
-            <div key={match.id} className="bg-secondary p-6 rounded-xl border border-tertiary">
-              <div className="flex justify-between items-center">
-                <div className="flex-1">
-                  <h3 className="text-xl font-semibold text-text-primary">{match.team_a} vs {match.team_b}</h3>
-                  <p className="text-sm text-text-secondary mt-1">
-                    {new Date(match.start_time).toLocaleString()}
-                  </p>
+            <div key={match.id} className="bg-secondary rounded-xl border border-tertiary overflow-hidden">
+              {/* Match Header */}
+              <div className="bg-tertiary/50 p-4 flex justify-between items-center cursor-pointer" onClick={() => setSelectedMatch(selectedMatch?.id === match.id ? null : match)}>
+                <div className="flex items-center gap-4">
+                  <span className={`px-2 py-1 rounded text-xs font-bold ${match.status === 'LIVE' ? 'bg-red-500 text-white animate-pulse' : 'bg-blue-500 text-white'}`}>
+                    {match.status}
+                  </span>
+                  <h3 className="text-xl font-bold text-text-primary">{match.teamA} vs {match.teamB}</h3>
                 </div>
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => addToBetSlip(match, 'TEAM_A')}
-                    className="flex flex-col items-center bg-tertiary hover:bg-accent-gold/20 border border-accent-gold/30 rounded-lg px-6 py-3 transition-all"
-                  >
-                    <span className="text-xs text-text-secondary">{match.team_a}</span>
-                    <span className="text-2xl font-bold text-accent-gold">{match.odds_a}</span>
-                  </button>
-                  <button
-                    onClick={() => addToBetSlip(match, 'TEAM_B')}
-                    className="flex flex-col items-center bg-tertiary hover:bg-accent-blue/20 border border-accent-blue/30 rounded-lg px-6 py-3 transition-all"
-                  >
-                    <span className="text-xs text-text-secondary">{match.team_b}</span>
-                    <span className="text-2xl font-bold text-accent-blue">{match.odds_b}</span>
-                  </button>
-                </div>
+                <span className="text-text-secondary text-sm">{new Date(match.date).toLocaleString()}</span>
               </div>
+
+              {/* Markets (Expanded View) */}
+              {(selectedMatch?.id === match.id || match.status === 'LIVE') && (
+                <div className="p-4 space-y-4 animate-slide-in">
+                  {match.markets.map((market, idx) => (
+                    <div key={idx} className="border-b border-tertiary last:border-0 pb-4 last:pb-0">
+                      <h4 className="text-sm text-text-secondary mb-3">{market.name}</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        {market.options.map((option, optIdx) => (
+                          <button
+                            key={optIdx}
+                            onClick={() => {
+                              const amount = prompt(`Bet on ${option.label} @ ${option.odds}\nEnter Amount:`);
+                              if (amount) {
+                                setBetAmount(amount);
+                                placeBet(match.id, market.name, option.label, option.odds);
+                              }
+                            }}
+                            className="bg-primary hover:bg-tertiary border border-tertiary rounded-lg p-3 flex justify-between items-center transition-all group"
+                          >
+                            <span className="font-medium text-text-primary">{option.label}</span>
+                            <span className="font-bold text-accent-gold group-hover:scale-110 transition-transform">{option.odds}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
-
-        {/* Bet Slip Modal */}
-        {showBetSlip && betSlip && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-secondary p-8 rounded-2xl border border-tertiary max-w-md w-full">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-accent-gold">Bet Slip</h2>
-                <button onClick={() => { clearBetSlip(); setShowBetSlip(false); }} className="text-text-secondary hover:text-text-primary">✕</button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="bg-tertiary p-4 rounded-lg">
-                  <p className="text-sm text-text-secondary">Selection</p>
-                  <p className="text-xl font-bold text-text-primary">{betSlip.team}</p>
-                  <p className="text-sm text-accent-gold">Odds: {betSlip.odds}</p>
-                </div>
-
-                <Input
-                  label="Bet Amount (₹)"
-                  type="number"
-                  value={betSlip.amount}
-                  onChange={(e) => updateBetAmount(e.target.value)}
-                />
-
-                <div className="bg-tertiary p-4 rounded-lg">
-                  <div className="flex justify-between">
-                    <span className="text-text-secondary">Potential Win</span>
-                    <span className="text-xl font-bold text-status-success">₹{potentialWin}</span>
-                  </div>
-                </div>
-
-                <Button
-                  className="w-full bg-status-success hover:bg-status-success/90 text-white"
-                  onClick={handlePlaceBet}
-                >
-                  Place Bet
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

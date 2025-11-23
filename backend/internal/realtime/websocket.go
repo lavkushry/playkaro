@@ -10,51 +10,128 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Message types
+const (
+	TypeOddsUpdate  = "odds_update"
+	TypeChatMessage = "chat_message"
+)
+
+type WSMessage struct {
+	Type    string      `json:"type"`
+	Payload interface{} `json:"payload"`
+}
+
+type ChatMessage struct {
+	Username  string    `json:"username"`
+	Message   string    `json:"message"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
 }
 
-type Hub struct {
-	clients    map[*websocket.Conn]bool
-	broadcast  chan []byte
-	register   chan *websocket.Conn
-	unregister chan *websocket.Conn
-	mu         sync.Mutex
+// Client represents a single websocket connection
+type Client struct {
+	hub *Hub
+	conn *websocket.Conn
+	send chan WSMessage
 }
 
-var MainHub = Hub{
-	clients:    make(map[*websocket.Conn]bool),
-	broadcast:  make(chan []byte),
-	register:   make(chan *websocket.Conn),
-	unregister: make(chan *websocket.Conn),
+func (c *Client) readPump() {
+	defer func() {
+		c.hub.unregister <- c
+		c.conn.Close()
+	}()
+	for {
+		var msg WSMessage
+		err := c.conn.ReadJSON(&msg)
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("error: %v", err)
+			}
+			break
+		}
+		// Handle incoming messages (e.g., chat messages)
+		if msg.Type == TypeChatMessage {
+			// Broadcast chat message to all clients
+			// In a real app, you'd validate the user here
+			payloadMap, ok := msg.Payload.(map[string]interface{})
+			if ok {
+				username, userOk := payloadMap["username"].(string)
+				messageContent, msgOk := payloadMap["message"].(string)
+				if userOk && msgOk {
+					chatMsg := ChatMessage{
+						Username:  username,
+						Message:   messageContent,
+						Timestamp: time.Now(),
+					}
+					c.hub.broadcast <- WSMessage{
+						Type:    TypeChatMessage,
+						Payload: chatMsg,
+					}
+				} else {
+					log.Printf("Invalid chat message payload format: missing username or message in %v", msg.Payload)
+				}
+			} else {
+				log.Printf("Invalid chat message payload type: expected map[string]interface{}, got %T", msg.Payload)
+			}
+		}
+	}
 }
+
+func (c *Client) writePump() {
+	defer func() {
+		c.conn.Close()
+	}()
+	for message := range c.send {
+		err := c.conn.WriteJSON(message)
+		if err != nil {
+			log.Printf("write error: %v", err)
+			return
+		}
+	}
+}
+
+type Hub struct {
+	clients    map[*Client]bool
+	broadcast  chan WSMessage
+	register   chan *Client
+	unregister chan *Client
+}
+
+func newHub() *Hub {
+	return &Hub{
+		broadcast:  make(chan WSMessage),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+		clients:    make(map[*Client]bool),
+	}
+}
+
+var MainHub = newHub()
 
 func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.register:
-			h.mu.Lock()
 			h.clients[client] = true
-			h.mu.Unlock()
 		case client := <-h.unregister:
-			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				client.Close()
+				close(client.send)
 			}
-			h.mu.Unlock()
 		case message := <-h.broadcast:
-			h.mu.Lock()
 			for client := range h.clients {
-				err := client.WriteMessage(websocket.TextMessage, message)
-				if err != nil {
-					client.Close()
+				select {
+				case client.send <- message:
+				default:
+					close(client.send)
 					delete(h.clients, client)
 				}
 			}
-			h.mu.Unlock()
 		}
 	}
 }
