@@ -61,8 +61,14 @@ func UpdateMatchOdds(c *gin.Context) {
 	}
 
 	// Broadcast odds update via WebSocket
-	msg := []byte(`{"type": "ODDS_UPDATE", "match_id": "` + matchID + `", "odds_a": ` +
-		string(rune(req.OddsA)) + `, "odds_b": ` + string(rune(req.OddsB)) + `}`)
+	msg := realtime.WSMessage{
+		Type: realtime.TypeOddsUpdate,
+		Payload: map[string]interface{}{
+			"match_id": matchID,
+			"odds_a":   req.OddsA,
+			"odds_b":   req.OddsB,
+		},
+	}
 	realtime.MainHub.Broadcast(msg)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Odds updated"})

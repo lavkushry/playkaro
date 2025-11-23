@@ -3,7 +3,6 @@ package realtime
 import (
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -142,21 +141,18 @@ func ServeWS(c *gin.Context) {
 		log.Println(err)
 		return
 	}
-	MainHub.register <- ws
 
-	// Keep alive
-	go func() {
-		for {
-			if _, _, err := ws.NextReader(); err != nil {
-				MainHub.unregister <- ws
-				break
-			}
-		}
-	}()
+	client := &Client{hub: MainHub, conn: ws, send: make(chan WSMessage, 256)}
+	client.hub.register <- client
+
+	// Allow collection of memory referenced by the caller by doing all work in
+	// new goroutines.
+	go client.writePump()
+	go client.readPump()
 }
 
 // Broadcast sends a message to all connected clients
-func (h *Hub) Broadcast(message []byte) {
+func (h *Hub) Broadcast(message WSMessage) {
 	h.broadcast <- message
 }
 
@@ -166,7 +162,14 @@ func StartOddsSimulation() {
 	go func() {
 		for range ticker.C {
 			// In a real app, this would come from a data provider
-			msg := []byte(`{"type": "ODDS_UPDATE", "match_id": "1", "odds_a": 1.95, "odds_b": 1.95}`)
+			msg := WSMessage{
+				Type: TypeOddsUpdate,
+				Payload: map[string]interface{}{
+					"match_id": "1",
+					"odds_a":   1.95,
+					"odds_b":   1.95,
+				},
+			}
 			MainHub.broadcast <- msg
 		}
 	}()

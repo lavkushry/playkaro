@@ -12,48 +12,62 @@ import (
 	"github.com/playkaro/backend/graph/model"
 	"github.com/playkaro/backend/internal/auth"
 	"github.com/playkaro/backend/internal/db"
+	"github.com/playkaro/backend/internal/models"
 )
 
 // Login is the resolver for the login field.
 func (r *mutationResolver) Login(ctx context.Context, email string, password string) (*model.AuthPayload, error) {
-	var user model.User
-	var storedPassword string
+	var user models.User
 	var id string
 	var kycLevel int
 
-	err := db.DB.QueryRow("SELECT id, username, email, mobile, password, COALESCE(kyc_level, 0) FROM users WHERE email=$1", email).
-		Scan(&id, &user.Username, &user.Email, &user.Mobile, &storedPassword, &kycLevel)
+	// Fetch user from DB
+	err := db.DB.QueryRow("SELECT id, username, email, mobile, password_hash, COALESCE(kyc_level, 0) FROM users WHERE email=$1", email).
+		Scan(&id, &user.Username, &user.Email, &user.Mobile, &user.PasswordHash, &kycLevel)
 
 	if err != nil {
 		return nil, errors.New("invalid credentials")
 	}
 
-	if !auth.CheckPasswordHash(password, storedPassword) {
+	// Check password
+	if !user.CheckPassword(password) {
 		return nil, errors.New("invalid credentials")
 	}
 
-	user.ID = id
-	user.KycLevel = kycLevel
-
-	token, err := auth.GenerateJWT(id)
+	// Generate Token
+	token, err := auth.GenerateToken(id)
 	if err != nil {
 		return nil, err
 	}
 
 	return &model.AuthPayload{
 		Token: token,
-		User:  &user,
+		User:  &model.User{
+			ID:       id,
+			Username: user.Username,
+			Email:    user.Email,
+			Mobile:   &user.Mobile,
+			KycLevel: kycLevel,
+		},
 	}, nil
 }
 
 // Register is the resolver for the register field.
 func (r *mutationResolver) Register(ctx context.Context, username string, email string, password string, mobile string) (*model.AuthPayload, error) {
-	hashedPassword, _ := auth.HashPassword(password)
-	var id string
+	user := models.User{
+		Username: username,
+		Email:    email,
+		Mobile:   mobile,
+	}
 
+	if err := user.SetPassword(password); err != nil {
+		return nil, err
+	}
+
+	var id string
 	err := db.DB.QueryRow(
-		"INSERT INTO users (username, email, password, mobile) VALUES ($1, $2, $3, $4) RETURNING id",
-		username, email, hashedPassword, mobile,
+		"INSERT INTO users (username, email, password_hash, mobile) VALUES ($1, $2, $3, $4) RETURNING id",
+		user.Username, user.Email, user.PasswordHash, user.Mobile,
 	).Scan(&id)
 
 	if err != nil {
@@ -63,7 +77,7 @@ func (r *mutationResolver) Register(ctx context.Context, username string, email 
 	// Create wallet
 	db.DB.Exec("INSERT INTO wallets (user_id, balance, currency) VALUES ($1, 0, 'INR')", id)
 
-	token, _ := auth.GenerateJWT(id)
+	token, _ := auth.GenerateToken(id)
 
 	return &model.AuthPayload{
 		Token: token,
@@ -98,7 +112,7 @@ func (r *queryResolver) Balance(ctx context.Context) (*model.Wallet, error) {
 
 // Matches is the resolver for the matches field.
 func (r *queryResolver) Matches(ctx context.Context) ([]*model.Match, error) {
-	rows, err := db.DB.Query("SELECT id, team_a, team_b, start_time, status, odds_team_a, odds_team_b, odds_draw FROM matches")
+	rows, err := db.DB.Query("SELECT id, team_a, team_b, start_time, status, odds_a, odds_b FROM matches")
 	if err != nil {
 		return nil, err
 	}
@@ -108,8 +122,10 @@ func (r *queryResolver) Matches(ctx context.Context) ([]*model.Match, error) {
 	for rows.Next() {
 		var m model.Match
 		var t time.Time
-		rows.Scan(&m.ID, &m.TeamA, &m.TeamB, &t, &m.Status, &m.OddsTeamA, &m.OddsTeamB, &m.OddsDraw)
+		// We don't have odds_draw in DB yet, so we'll skip it or set to 0
+		rows.Scan(&m.ID, &m.TeamA, &m.TeamB, &t, &m.Status, &m.OddsTeamA, &m.OddsTeamB)
 		m.StartTime = t.String()
+		m.OddsDraw = 0 // Default
 		matches = append(matches, &m)
 	}
 	return matches, nil
@@ -119,12 +135,13 @@ func (r *queryResolver) Matches(ctx context.Context) ([]*model.Match, error) {
 func (r *queryResolver) Match(ctx context.Context, id string) (*model.Match, error) {
 	var m model.Match
 	var t time.Time
-	err := db.DB.QueryRow("SELECT id, team_a, team_b, start_time, status, odds_team_a, odds_team_b, odds_draw FROM matches WHERE id=$1", id).
-		Scan(&m.ID, &m.TeamA, &m.TeamB, &t, &m.Status, &m.OddsTeamA, &m.OddsTeamB, &m.OddsDraw)
+	err := db.DB.QueryRow("SELECT id, team_a, team_b, start_time, status, odds_a, odds_b FROM matches WHERE id=$1", id).
+		Scan(&m.ID, &m.TeamA, &m.TeamB, &t, &m.Status, &m.OddsTeamA, &m.OddsTeamB)
 	if err != nil {
 		return nil, err
 	}
 	m.StartTime = t.String()
+	m.OddsDraw = 0
 	return &m, nil
 }
 
