@@ -83,6 +83,30 @@ func main() {
 		historyGroup.GET("/bets", handlers.GetBets)
 	}
 
+	// Payment Routes
+	paymentGroup := r.Group("/api/v1/payment")
+	{
+		paymentGroup.POST("/deposit", middleware.AuthMiddleware(), handlers.InitiateDeposit)
+		paymentGroup.POST("/withdraw", middleware.AuthMiddleware(), handlers.InitiateWithdrawal)
+		paymentGroup.POST("/webhook/razorpay", handlers.RazorpayWebhook) // Public webhook
+	}
+
+	// KYC Routes
+	kycGroup := r.Group("/api/v1/kyc")
+	kycGroup.Use(middleware.AuthMiddleware())
+	{
+		kycGroup.POST("/upload", handlers.UploadKYCDocument)
+		kycGroup.GET("/status", handlers.GetKYCStatus)
+	}
+
+	// Admin KYC Routes
+	adminKYCGroup := r.Group("/api/v1/admin/kyc")
+	adminKYCGroup.Use(middleware.AuthMiddleware())
+	adminKYCGroup.Use(middleware.AdminMiddleware())
+	{
+		adminKYCGroup.POST("/approve", handlers.ApproveKYC)
+	}
+
 	// Public Routes
 	r.GET("/api/v1/matches", handlers.GetMatches)
 	r.GET("/ws", realtime.ServeWS)

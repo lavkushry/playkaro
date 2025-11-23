@@ -3,8 +3,9 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 
 import Admin from "./pages/Admin";
-import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
+import KYC from "./pages/KYC";
+import Payment from "./pages/Payment";
 import Sportsbook from "./pages/Sportsbook";
 
 function App() {
@@ -17,11 +18,14 @@ function App() {
         <Route path="/sportsbook" element={<Sportsbook />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/history" element={<History />} />
+        <Route path="/payment" element={<Payment />} />
+        <Route path="/kyc" element={<KYC />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   );
 }
+
 
 
 

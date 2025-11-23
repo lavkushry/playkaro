@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Button";
-import { Input } from "../components/ui/Input";
 import { useWalletStore } from "../store/useWalletStore";
 
 export default function Dashboard() {
@@ -61,28 +60,32 @@ export default function Dashboard() {
           </div>
 
           <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-4">
-              <Input
-                type="number"
-                placeholder="Enter amount"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-              <div className="flex gap-4">
-                <Button
-                  className="flex-1 bg-status-success hover:bg-status-success/90 text-white"
-                  onClick={() => handleTransaction("DEPOSIT")}
-                >
-                  Deposit
-                </Button>
-                <Button
-                  className="flex-1 bg-status-error hover:bg-status-error/90 text-white"
-                  onClick={() => handleTransaction("WITHDRAW")}
-                >
-                  Withdraw
-                </Button>
-              </div>
-            </div>
+            <Button
+              className="flex-1 bg-status-success hover:bg-status-success/90 text-white"
+              onClick={() => navigate("/payment")}
+            >
+              💰 Deposit Money
+            </Button>
+            <Button
+              className="flex-1 bg-status-error hover:bg-status-error/90 text-white"
+              onClick={() => navigate("/payment")}
+            >
+              💸 Withdraw Money
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => navigate("/kyc")}
+            >
+              📄 Complete KYC
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => navigate("/payment")}
+            >
+              📊 View Transactions
+            </Button>
           </div>
         </div>
 

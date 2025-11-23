@@ -95,6 +95,32 @@ func InitSchema() {
 	INSERT INTO matches (team_a, team_b, odds_a, odds_b)
 	SELECT 'India', 'Australia', 1.80, 2.10
 	WHERE NOT EXISTS (SELECT 1 FROM matches);
+
+	CREATE TABLE IF NOT EXISTS payment_transactions (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		gateway VARCHAR(50) NOT NULL,
+		order_id VARCHAR(100),
+		amount DECIMAL(15, 2) NOT NULL,
+		currency VARCHAR(3) DEFAULT 'INR',
+		status VARCHAR(20) DEFAULT 'PENDING',
+		method VARCHAR(50),
+		reference_id VARCHAR(100),
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS kyc_documents (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+		document_type VARCHAR(20) NOT NULL,
+		document_url TEXT NOT NULL,
+		status VARCHAR(20) DEFAULT 'PENDING',
+		reviewed_by UUID REFERENCES users(id),
+		remarks TEXT,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
+	ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_level INT DEFAULT 0;
 	`
 
 	_, err := DB.Exec(schema)
