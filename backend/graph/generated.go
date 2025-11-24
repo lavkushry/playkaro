@@ -64,9 +64,11 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
+		Deposit  func(childComplexity int, amount float64, idempotencyKey *string) int
 		Login    func(childComplexity int, email string, password string) int
 		PlaceBet func(childComplexity int, matchID string, selection string, amount float64) int
 		Register func(childComplexity int, username string, email string, password string, mobile string) int
+		Withdraw func(childComplexity int, amount float64) int
 	}
 
 	Query struct {
@@ -86,10 +88,14 @@ type ComplexityRoot struct {
 	}
 
 	Wallet struct {
-		Balance  func(childComplexity int) int
-		Bonus    func(childComplexity int) int
-		Currency func(childComplexity int) int
-		ID       func(childComplexity int) int
+		Balance         func(childComplexity int) int
+		Bonus           func(childComplexity int) int
+		BonusBalance    func(childComplexity int) int
+		Currency        func(childComplexity int) int
+		DepositBalance  func(childComplexity int) int
+		ID              func(childComplexity int) int
+		LockedBalance   func(childComplexity int) int
+		WinningsBalance func(childComplexity int) int
 	}
 }
 
@@ -97,6 +103,8 @@ type MutationResolver interface {
 	Login(ctx context.Context, email string, password string) (*model.AuthPayload, error)
 	Register(ctx context.Context, username string, email string, password string, mobile string) (*model.AuthPayload, error)
 	PlaceBet(ctx context.Context, matchID string, selection string, amount float64) (bool, error)
+	Deposit(ctx context.Context, amount float64, idempotencyKey *string) (*model.Wallet, error)
+	Withdraw(ctx context.Context, amount float64) (*model.Wallet, error)
 }
 type QueryResolver interface {
 	Me(ctx context.Context) (*model.User, error)
@@ -186,6 +194,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Match.TeamB(childComplexity), true
 
+	case "Mutation.deposit":
+		if e.complexity.Mutation.Deposit == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deposit_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.Deposit(childComplexity, args["amount"].(float64), args["idempotencyKey"].(*string)), true
 	case "Mutation.login":
 		if e.complexity.Mutation.Login == nil {
 			break
@@ -219,6 +238,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.Register(childComplexity, args["username"].(string), args["email"].(string), args["password"].(string), args["mobile"].(string)), true
+	case "Mutation.withdraw":
+		if e.complexity.Mutation.Withdraw == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_withdraw_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.Withdraw(childComplexity, args["amount"].(float64)), true
 
 	case "Query.balance":
 		if e.complexity.Query.Balance == nil {
@@ -299,18 +329,42 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Wallet.Bonus(childComplexity), true
+	case "Wallet.bonusBalance":
+		if e.complexity.Wallet.BonusBalance == nil {
+			break
+		}
+
+		return e.complexity.Wallet.BonusBalance(childComplexity), true
 	case "Wallet.currency":
 		if e.complexity.Wallet.Currency == nil {
 			break
 		}
 
 		return e.complexity.Wallet.Currency(childComplexity), true
+	case "Wallet.depositBalance":
+		if e.complexity.Wallet.DepositBalance == nil {
+			break
+		}
+
+		return e.complexity.Wallet.DepositBalance(childComplexity), true
 	case "Wallet.id":
 		if e.complexity.Wallet.ID == nil {
 			break
 		}
 
 		return e.complexity.Wallet.ID(childComplexity), true
+	case "Wallet.lockedBalance":
+		if e.complexity.Wallet.LockedBalance == nil {
+			break
+		}
+
+		return e.complexity.Wallet.LockedBalance(childComplexity), true
+	case "Wallet.winningsBalance":
+		if e.complexity.Wallet.WinningsBalance == nil {
+			break
+		}
+
+		return e.complexity.Wallet.WinningsBalance(childComplexity), true
 
 	}
 	return 0, false
@@ -435,6 +489,22 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
 // region    ***************************** args.gotpl *****************************
 
+func (ec *executionContext) field_Mutation_deposit_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "amount", ec.unmarshalNFloat2float64)
+	if err != nil {
+		return nil, err
+	}
+	args["amount"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "idempotencyKey", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["idempotencyKey"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_login_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -495,6 +565,17 @@ func (ec *executionContext) field_Mutation_register_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["mobile"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_withdraw_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "amount", ec.unmarshalNFloat2float64)
+	if err != nil {
+		return nil, err
+	}
+	args["amount"] = arg0
 	return args, nil
 }
 
@@ -1011,6 +1092,124 @@ func (ec *executionContext) fieldContext_Mutation_placeBet(ctx context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_deposit(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_deposit,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().Deposit(ctx, fc.Args["amount"].(float64), fc.Args["idempotencyKey"].(*string))
+		},
+		nil,
+		ec.marshalNWallet2ᚖgithubᚗcomᚋplaykaroᚋbackendᚋgraphᚋmodelᚐWallet,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deposit(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Wallet_id(ctx, field)
+			case "balance":
+				return ec.fieldContext_Wallet_balance(ctx, field)
+			case "depositBalance":
+				return ec.fieldContext_Wallet_depositBalance(ctx, field)
+			case "bonusBalance":
+				return ec.fieldContext_Wallet_bonusBalance(ctx, field)
+			case "winningsBalance":
+				return ec.fieldContext_Wallet_winningsBalance(ctx, field)
+			case "lockedBalance":
+				return ec.fieldContext_Wallet_lockedBalance(ctx, field)
+			case "currency":
+				return ec.fieldContext_Wallet_currency(ctx, field)
+			case "bonus":
+				return ec.fieldContext_Wallet_bonus(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Wallet", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deposit_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_withdraw(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_withdraw,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().Withdraw(ctx, fc.Args["amount"].(float64))
+		},
+		nil,
+		ec.marshalNWallet2ᚖgithubᚗcomᚋplaykaroᚋbackendᚋgraphᚋmodelᚐWallet,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_withdraw(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Wallet_id(ctx, field)
+			case "balance":
+				return ec.fieldContext_Wallet_balance(ctx, field)
+			case "depositBalance":
+				return ec.fieldContext_Wallet_depositBalance(ctx, field)
+			case "bonusBalance":
+				return ec.fieldContext_Wallet_bonusBalance(ctx, field)
+			case "winningsBalance":
+				return ec.fieldContext_Wallet_winningsBalance(ctx, field)
+			case "lockedBalance":
+				return ec.fieldContext_Wallet_lockedBalance(ctx, field)
+			case "currency":
+				return ec.fieldContext_Wallet_currency(ctx, field)
+			case "bonus":
+				return ec.fieldContext_Wallet_bonus(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Wallet", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_withdraw_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_me(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1082,6 +1281,14 @@ func (ec *executionContext) fieldContext_Query_balance(_ context.Context, field 
 				return ec.fieldContext_Wallet_id(ctx, field)
 			case "balance":
 				return ec.fieldContext_Wallet_balance(ctx, field)
+			case "depositBalance":
+				return ec.fieldContext_Wallet_depositBalance(ctx, field)
+			case "bonusBalance":
+				return ec.fieldContext_Wallet_bonusBalance(ctx, field)
+			case "winningsBalance":
+				return ec.fieldContext_Wallet_winningsBalance(ctx, field)
+			case "lockedBalance":
+				return ec.fieldContext_Wallet_lockedBalance(ctx, field)
 			case "currency":
 				return ec.fieldContext_Wallet_currency(ctx, field)
 			case "bonus":
@@ -1480,6 +1687,14 @@ func (ec *executionContext) fieldContext_User_wallet(_ context.Context, field gr
 				return ec.fieldContext_Wallet_id(ctx, field)
 			case "balance":
 				return ec.fieldContext_Wallet_balance(ctx, field)
+			case "depositBalance":
+				return ec.fieldContext_Wallet_depositBalance(ctx, field)
+			case "bonusBalance":
+				return ec.fieldContext_Wallet_bonusBalance(ctx, field)
+			case "winningsBalance":
+				return ec.fieldContext_Wallet_winningsBalance(ctx, field)
+			case "lockedBalance":
+				return ec.fieldContext_Wallet_lockedBalance(ctx, field)
 			case "currency":
 				return ec.fieldContext_Wallet_currency(ctx, field)
 			case "bonus":
@@ -1537,6 +1752,122 @@ func (ec *executionContext) _Wallet_balance(ctx context.Context, field graphql.C
 }
 
 func (ec *executionContext) fieldContext_Wallet_balance(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Wallet",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Wallet_depositBalance(ctx context.Context, field graphql.CollectedField, obj *model.Wallet) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Wallet_depositBalance,
+		func(ctx context.Context) (any, error) {
+			return obj.DepositBalance, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Wallet_depositBalance(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Wallet",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Wallet_bonusBalance(ctx context.Context, field graphql.CollectedField, obj *model.Wallet) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Wallet_bonusBalance,
+		func(ctx context.Context) (any, error) {
+			return obj.BonusBalance, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Wallet_bonusBalance(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Wallet",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Wallet_winningsBalance(ctx context.Context, field graphql.CollectedField, obj *model.Wallet) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Wallet_winningsBalance,
+		func(ctx context.Context) (any, error) {
+			return obj.WinningsBalance, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Wallet_winningsBalance(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Wallet",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Wallet_lockedBalance(ctx context.Context, field graphql.CollectedField, obj *model.Wallet) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Wallet_lockedBalance,
+		func(ctx context.Context) (any, error) {
+			return obj.LockedBalance, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Wallet_lockedBalance(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Wallet",
 		Field:      field,
@@ -3219,6 +3550,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "deposit":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deposit(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "withdraw":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_withdraw(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -3447,6 +3792,26 @@ func (ec *executionContext) _Wallet(ctx context.Context, sel ast.SelectionSet, o
 			}
 		case "balance":
 			out.Values[i] = ec._Wallet_balance(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "depositBalance":
+			out.Values[i] = ec._Wallet_depositBalance(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bonusBalance":
+			out.Values[i] = ec._Wallet_bonusBalance(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "winningsBalance":
+			out.Values[i] = ec._Wallet_winningsBalance(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lockedBalance":
+			out.Values[i] = ec._Wallet_lockedBalance(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -3974,6 +4339,20 @@ func (ec *executionContext) marshalNUser2ᚖgithubᚗcomᚋplaykaroᚋbackendᚋ
 		return graphql.Null
 	}
 	return ec._User(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNWallet2githubᚗcomᚋplaykaroᚋbackendᚋgraphᚋmodelᚐWallet(ctx context.Context, sel ast.SelectionSet, v model.Wallet) graphql.Marshaler {
+	return ec._Wallet(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNWallet2ᚖgithubᚗcomᚋplaykaroᚋbackendᚋgraphᚋmodelᚐWallet(ctx context.Context, sel ast.SelectionSet, v *model.Wallet) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Wallet(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {

@@ -1,34 +1,12 @@
-# Development files
-.env
-.env.local
-*.log
-
-# Dependencies
-node_modules/
-vendor/
-
-# Build artifacts
-dist/
-build/
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Test files
-*_test.go
-coverage.txt
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Git
-.git/
+.git
 .gitignore
+.gocache
+Dockerfile
+node_modules
+vendor
+tests
+tmp
+*.log
+*.tmp
+*.swp
+*.test

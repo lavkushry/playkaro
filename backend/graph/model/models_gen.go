@@ -34,8 +34,12 @@ type User struct {
 }
 
 type Wallet struct {
-	ID       string  `json:"id"`
-	Balance  float64 `json:"balance"`
-	Currency string  `json:"currency"`
-	Bonus    float64 `json:"bonus"`
+	ID              string  `json:"id"`
+	Balance         float64 `json:"balance"`
+	DepositBalance  float64 `json:"depositBalance"`
+	BonusBalance    float64 `json:"bonusBalance"`
+	WinningsBalance float64 `json:"winningsBalance"`
+	LockedBalance   float64 `json:"lockedBalance"`
+	Currency        string  `json:"currency"`
+	Bonus           float64 `json:"bonus"`
 }

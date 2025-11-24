@@ -67,6 +67,7 @@ func (tm *TournamentManager) StartTournament(tournamentID string) error {
 	if err != nil {
 		return err
 	}
+	_ = matches // Mock save
 
 	// Save matches to DB
 	// Update tournament status to ACTIVE

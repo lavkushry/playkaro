@@ -77,7 +77,7 @@ func (pd *PrizeDistributor) CalculatePrizes(t *Tournament, participants []Partic
 
 		for _, p := range rankedPlayers {
 			// Check exact rank
-			rankStr := string(rune('0' + p.Rank)) // Simple int to string for single digits
+			// rankStr := string(rune('0' + p.Rank)) // Unused
 			// Better: use fmt.Sprintf or just iterate map
 
 			// Let's iterate the map to handle ranges if we supported them

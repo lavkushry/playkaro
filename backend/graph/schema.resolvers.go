@@ -22,20 +22,15 @@ func (r *mutationResolver) Login(ctx context.Context, email string, password str
 	var id string
 	var kycLevel int
 
-	// Fetch user from DB
 	err := db.DB.QueryRow("SELECT id, username, email, mobile, password_hash, COALESCE(kyc_level, 0) FROM users WHERE email=$1", email).
 		Scan(&id, &user.Username, &user.Email, &user.Mobile, &user.PasswordHash, &kycLevel)
-
 	if err != nil {
 		return nil, errors.New("invalid credentials")
 	}
-
-	// Check password
 	if !user.CheckPassword(password) {
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Generate Token
 	token, err := auth.GenerateToken(id)
 	if err != nil {
 		return nil, err
@@ -60,7 +55,6 @@ func (r *mutationResolver) Register(ctx context.Context, username string, email 
 		Email:    email,
 		Mobile:   mobile,
 	}
-
 	if err := user.SetPassword(password); err != nil {
 		return nil, err
 	}
@@ -70,14 +64,11 @@ func (r *mutationResolver) Register(ctx context.Context, username string, email 
 		"INSERT INTO users (username, email, password_hash, mobile) VALUES ($1, $2, $3, $4) RETURNING id",
 		user.Username, user.Email, user.PasswordHash, user.Mobile,
 	).Scan(&id)
-
 	if err != nil {
 		return nil, errors.New("email already exists")
 	}
 
-	// Create wallet
 	db.DB.Exec("INSERT INTO wallets (user_id, currency) VALUES ($1, 'INR')", id)
-
 	token, _ := auth.GenerateToken(id)
 
 	return &model.AuthPayload{
@@ -149,6 +140,42 @@ func (r *mutationResolver) PlaceBet(ctx context.Context, matchID string, selecti
 	return true, nil
 }
 
+// Deposit is the resolver for the deposit field.
+func (r *mutationResolver) Deposit(ctx context.Context, amount float64, idempotencyKey *string) (*model.Wallet, error) {
+	userID, ok := UserIDFromContext(ctx)
+	if !ok {
+		return nil, errors.New("unauthorized")
+	}
+	ref := ""
+	if idempotencyKey != nil {
+		ref = *idempotencyKey
+	}
+	if ref == "" {
+		ref = "REF-" + time.Now().Format("20060102150405")
+	}
+
+	svc := wallet.NewService(db.DB, db.RDB)
+	w, err := svc.Deposit(ctx, userID, amount, ref)
+	if err != nil {
+		return nil, err
+	}
+	return mapWallet(w), nil
+}
+
+// Withdraw is the resolver for the withdraw field.
+func (r *mutationResolver) Withdraw(ctx context.Context, amount float64) (*model.Wallet, error) {
+	userID, ok := UserIDFromContext(ctx)
+	if !ok {
+		return nil, errors.New("unauthorized")
+	}
+	svc := wallet.NewService(db.DB, db.RDB)
+	w, err := svc.Withdraw(ctx, userID, amount, "REF-"+time.Now().Format("20060102150405"))
+	if err != nil {
+		return nil, err
+	}
+	return mapWallet(w), nil
+}
+
 // Me is the resolver for the me field.
 func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 	userID, ok := UserIDFromContext(ctx)
@@ -162,6 +189,12 @@ func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	// Preload wallet for convenience
+	svc := wallet.NewService(db.DB, db.RDB)
+	if w, err := svc.Get(ctx, userID); err == nil {
+		user.Wallet = mapWallet(w)
 	}
 	return &user, nil
 }
@@ -178,12 +211,7 @@ func (r *queryResolver) Balance(ctx context.Context) (*model.Wallet, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &model.Wallet{
-		ID:       w.ID,
-		Balance:  w.DepositBalance + w.BonusBalance + w.WinningsBalance - w.LockedBalance,
-		Currency: w.Currency,
-		Bonus:    w.BonusBalance,
-	}, nil
+	return mapWallet(w), nil
 }
 
 // Matches is the resolver for the matches field.
@@ -198,10 +226,9 @@ func (r *queryResolver) Matches(ctx context.Context) ([]*model.Match, error) {
 	for rows.Next() {
 		var m model.Match
 		var t time.Time
-		// We don't have odds_draw in DB yet, so we'll skip it or set to 0
 		rows.Scan(&m.ID, &m.TeamA, &m.TeamB, &t, &m.Status, &m.OddsTeamA, &m.OddsTeamB)
 		m.StartTime = t.String()
-		m.OddsDraw = 0 // Default
+		m.OddsDraw = 0
 		matches = append(matches, &m)
 	}
 	return matches, nil
@@ -227,34 +254,19 @@ func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
-// User returns UserResolver implementation.
-func (r *Resolver) User() UserResolver { return &userResolver{r} }
-
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
-type userResolver struct{ *Resolver }
 
-// Wallet resolves the wallet field for a user.
-func (r *userResolver) Wallet(ctx context.Context, obj *model.User) (*model.Wallet, error) {
-	userID := obj.ID
-	if userID == "" {
-		var ok bool
-		userID, ok = UserIDFromContext(ctx)
-		if !ok {
-			return nil, errors.New("unauthorized")
-		}
-	}
-
-	svc := wallet.NewService(db.DB, db.RDB)
-	w, err := svc.Get(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
+// mapWallet converts internal wallet to GraphQL wallet.
+func mapWallet(w *models.Wallet) *model.Wallet {
 	return &model.Wallet{
-		ID:       w.ID,
-		Balance:  w.DepositBalance + w.BonusBalance + w.WinningsBalance - w.LockedBalance,
-		Currency: w.Currency,
-		Bonus:    w.BonusBalance,
-	}, nil
+		ID:              w.ID,
+		Balance:         w.DepositBalance + w.BonusBalance + w.WinningsBalance - w.LockedBalance,
+		DepositBalance:  w.DepositBalance,
+		BonusBalance:    w.BonusBalance,
+		WinningsBalance: w.WinningsBalance,
+		LockedBalance:   w.LockedBalance,
+		Currency:        w.Currency,
+		Bonus:           w.BonusBalance,
+	}
 }
