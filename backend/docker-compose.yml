@@ -84,6 +84,13 @@ services:
     networks:
       - playkaro-net
 
+  ai-service:
+    build: ./services/ai-service
+    ports:
+      - "8084:8084"
+    networks:
+      - playkaro-net
+
   # --- Gateway ---
   gateway:
     image: nginx:alpine
