@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/playkaro/backend/internal/db"
-	"github.com/playkaro/backend/internal/models"
 	"github.com/playkaro/backend/internal/wallet"
 )
 

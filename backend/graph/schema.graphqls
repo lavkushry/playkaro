@@ -9,7 +9,11 @@ type User {
 
 type Wallet {
   id: ID!
-  balance: Float!
+  balance: Float!         # aggregate: deposit + bonus + winnings - locked
+  depositBalance: Float!  # real money
+  bonusBalance: Float!    # bonus/locked funds
+  winningsBalance: Float! # withdrawable winnings
+  lockedBalance: Float!   # staked/locked
   currency: String!
   bonus: Float!
 }
@@ -41,4 +45,6 @@ type Mutation {
   login(email: String!, password: String!): AuthPayload!
   register(username: String!, email: String!, password: String!, mobile: String!): AuthPayload!
   placeBet(matchId: ID!, selection: String!, amount: Float!): Boolean!
+  deposit(amount: Float!, idempotencyKey: String): Wallet!
+  withdraw(amount: Float!): Wallet!
 }

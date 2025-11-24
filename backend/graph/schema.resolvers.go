@@ -13,6 +13,7 @@ import (
 	"github.com/playkaro/backend/internal/auth"
 	"github.com/playkaro/backend/internal/db"
 	"github.com/playkaro/backend/internal/models"
+	"github.com/playkaro/backend/internal/wallet"
 )
 
 // Login is the resolver for the login field.
@@ -42,7 +43,7 @@ func (r *mutationResolver) Login(ctx context.Context, email string, password str
 
 	return &model.AuthPayload{
 		Token: token,
-		User:  &model.User{
+		User: &model.User{
 			ID:       id,
 			Username: user.Username,
 			Email:    user.Email,
@@ -93,21 +94,96 @@ func (r *mutationResolver) Register(ctx context.Context, username string, email 
 
 // PlaceBet is the resolver for the placeBet field.
 func (r *mutationResolver) PlaceBet(ctx context.Context, matchID string, selection string, amount float64) (bool, error) {
-	// In a real implementation, you'd get the User ID from context (middleware)
-	// For PoC, we'll assume a fixed user or skip auth check in resolver
-	// This requires context-based auth which is advanced setup
+	userID, ok := UserIDFromContext(ctx)
+	if !ok {
+		return false, errors.New("unauthorized")
+	}
+	if selection != "TEAM_A" && selection != "TEAM_B" {
+		return false, errors.New("invalid selection")
+	}
+	if amount <= 0 {
+		return false, errors.New("amount must be positive")
+	}
+
+	svc := wallet.NewService(db.DB, db.RDB)
+	lockRef := "BET-" + time.Now().Format("20060102150405")
+	if _, err := svc.LockForBet(ctx, userID, amount, lockRef); err != nil {
+		return false, err
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		svc.SettleBet(ctx, userID, amount, 0, false, lockRef)
+		return false, err
+	}
+	defer tx.Rollback()
+
+	var odds float64
+	var oddsA, oddsB float64
+	err = tx.QueryRow("SELECT odds_a, odds_b FROM matches WHERE id=$1", matchID).Scan(&oddsA, &oddsB)
+	if err != nil {
+		svc.SettleBet(ctx, userID, amount, 0, false, lockRef)
+		return false, errors.New("match not found")
+	}
+	if selection == "TEAM_A" {
+		odds = oddsA
+	} else {
+		odds = oddsB
+	}
+
+	potentialWin := amount * odds
+	_, err = tx.Exec(
+		"INSERT INTO bets (user_id, match_id, selection, amount, odds, potential_win, status) VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')",
+		userID, matchID, selection, amount, odds, potentialWin,
+	)
+	if err != nil {
+		svc.SettleBet(ctx, userID, amount, 0, false, lockRef)
+		return false, errors.New("failed to place bet")
+	}
+
+	if err := tx.Commit(); err != nil {
+		svc.SettleBet(ctx, userID, amount, 0, false, lockRef)
+		return false, errors.New("commit failed")
+	}
+
 	return true, nil
 }
 
 // Me is the resolver for the me field.
 func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
-	// Requires Auth Middleware to populate context
-	return nil, nil
+	userID, ok := UserIDFromContext(ctx)
+	if !ok {
+		return nil, errors.New("unauthorized")
+	}
+
+	var user model.User
+	err := db.DB.QueryRow("SELECT id, username, email, mobile, COALESCE(kyc_level, 0) FROM users WHERE id=$1", userID).Scan(
+		&user.ID, &user.Username, &user.Email, &user.Mobile, &user.KycLevel,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 // Balance is the resolver for the balance field.
 func (r *queryResolver) Balance(ctx context.Context) (*model.Wallet, error) {
-	return nil, nil
+	userID, ok := UserIDFromContext(ctx)
+	if !ok {
+		return nil, errors.New("unauthorized")
+	}
+
+	svc := wallet.NewService(db.DB, db.RDB)
+	w, err := svc.Get(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &model.Wallet{
+		ID:       w.ID,
+		Balance:  w.DepositBalance + w.BonusBalance + w.WinningsBalance - w.LockedBalance,
+		Currency: w.Currency,
+		Bonus:    w.BonusBalance,
+	}, nil
 }
 
 // Matches is the resolver for the matches field.
@@ -151,5 +227,34 @@ func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
+// User returns UserResolver implementation.
+func (r *Resolver) User() UserResolver { return &userResolver{r} }
+
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
+type userResolver struct{ *Resolver }
+
+// Wallet resolves the wallet field for a user.
+func (r *userResolver) Wallet(ctx context.Context, obj *model.User) (*model.Wallet, error) {
+	userID := obj.ID
+	if userID == "" {
+		var ok bool
+		userID, ok = UserIDFromContext(ctx)
+		if !ok {
+			return nil, errors.New("unauthorized")
+		}
+	}
+
+	svc := wallet.NewService(db.DB, db.RDB)
+	w, err := svc.Get(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.Wallet{
+		ID:       w.ID,
+		Balance:  w.DepositBalance + w.BonusBalance + w.WinningsBalance - w.LockedBalance,
+		Currency: w.Currency,
+		Bonus:    w.BonusBalance,
+	}, nil
+}

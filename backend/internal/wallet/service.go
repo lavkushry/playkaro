@@ -74,7 +74,10 @@ func (s *Service) Deposit(ctx context.Context, userID string, amount float64, re
 	if err := s.resetDailyCounters(ctx, tx, wallet); err != nil {
 		return nil, err
 	}
-	limit := kycDailyLimits[wallet.KYCLevel]
+	limit, ok := kycDailyLimits[wallet.KYCLevel]
+	if !ok {
+		limit = kycDailyLimits[0]
+	}
 	if wallet.DailyDepositUsed+amount > limit {
 		return nil, errors.New("daily deposit limit exceeded for current KYC level")
 	}

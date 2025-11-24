@@ -16,9 +16,6 @@ import (
 	"github.com/playkaro/backend/internal/realtime"
 )
 
-
-
-
 func main() {
 	// Load .env file
 	if err := godotenv.Load(); err != nil {
@@ -144,9 +141,15 @@ func main() {
 	r.GET("/api/v1/matches", handlers.GetMatches)
 	r.GET("/ws", realtime.ServeWS)
 
-	// GraphQL Routes
+	// GraphQL Routes (protected by auth for mutations/queries needing user context)
 	srv := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}))
-	r.POST("/query", func(c *gin.Context) {
+	r.POST("/query", middleware.AuthMiddleware(), func(c *gin.Context) {
+		userID := c.GetString("userID")
+		ctx := c.Request.Context()
+		if userID != "" {
+			ctx = graph.WithUserID(ctx, userID)
+		}
+		c.Request = c.Request.WithContext(ctx)
 		srv.ServeHTTP(c.Writer, c.Request)
 	})
 	r.GET("/playground", func(c *gin.Context) {
@@ -158,7 +161,6 @@ func main() {
 	go realtime.MainHub.Run()
 
 	// Health Check
-
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
