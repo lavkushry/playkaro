@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/playkaro/payment-service/internal/db"
 	"github.com/playkaro/payment-service/internal/gateways/razorpay"
 	"github.com/playkaro/payment-service/internal/handlers"
+	"github.com/playkaro/payment-service/internal/telemetry"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 func main() {
@@ -34,8 +37,17 @@ func main() {
 	// Initialize handlers
 	paymentHandler := handlers.NewPaymentHandler(db.DB, razorpayClient)
 
+	// Initialize OpenTelemetry
+	shutdown, err := telemetry.InitTracer("payment-service", "otel-collector:4317")
+	if err != nil {
+		log.Printf("Failed to initialize OpenTelemetry: %v", err)
+	} else {
+		defer shutdown(context.Background())
+	}
+
 	// Setup router
 	r := gin.Default()
+	r.Use(otelgin.Middleware("payment-service"))
 
 	// Health check
 	r.GET("/health", func(c *gin.Context) {

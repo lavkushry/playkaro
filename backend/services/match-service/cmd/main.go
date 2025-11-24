@@ -1,15 +1,20 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/playkaro/match-service/internal/cache"
 	"github.com/playkaro/match-service/internal/db"
+	"github.com/playkaro/match-service/internal/engine"
 	"github.com/playkaro/match-service/internal/handlers"
+	"github.com/playkaro/match-service/internal/telemetry"
 	"github.com/playkaro/match-service/internal/websocket"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 func main() {
@@ -39,8 +44,26 @@ func main() {
 	matchHandler := handlers.NewMatchHandler(db.DB, matchCache)
 	oddsStreamHandler := websocket.NewOddsStreamHandler(matchCache)
 
+	// BEAST MODE: Start a Demo Match Simulator
+	// In production, this would be triggered by an Admin API or external feed
+	go func() {
+		time.Sleep(5 * time.Second) // Wait for server to start
+		log.Println("🚀 Starting Demo Match Simulator: India vs Australia")
+		sim := engine.NewMatchSimulator("demo_match_1", "India", "Australia", matchCache)
+		sim.Start()
+	}()
+
+	// Initialize OpenTelemetry
+	shutdown, err := telemetry.InitTracer("match-service", "otel-collector:4317")
+	if err != nil {
+		log.Printf("Failed to initialize OpenTelemetry: %v", err)
+	} else {
+		defer shutdown(context.Background())
+	}
+
 	// Setup router
 	r := gin.Default()
+	r.Use(otelgin.Middleware("match-service"))
 
 	// CORS middleware (for development)
 	r.Use(func(c *gin.Context) {

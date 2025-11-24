@@ -1,0 +1,61 @@
+_format_version: "3.0"
+services:
+  - name: payment-service
+    url: http://payment-service:8081
+    routes:
+      - name: payment-routes
+        paths:
+          - /api/v1/payments
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          policy: local
+
+  - name: match-service
+    url: http://match-service:8082
+    routes:
+      - name: match-routes
+        paths:
+          - /api/v1/matches
+          - /ws/odds
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - OPTIONS
+
+  - name: game-engine
+    url: http://game-engine:8083
+    routes:
+      - name: game-routes
+        paths:
+          - /api/v1/games
+          - /api/v1/sessions
+          - /ws/sessions
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "*"
+
+  - name: ai-service
+    url: http://ai-service:8084
+    routes:
+      - name: ai-routes
+        paths:
+          - /api/v1/ai
+
+plugins:
+  - name: correlation-id
+    config:
+      header_name: X-Request-ID
+      generator: uuid
+
+  - name: prometheus
+    config:
+      per_consumer: false

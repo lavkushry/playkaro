@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/playkaro/game-engine/internal/handlers"
 	"github.com/playkaro/game-engine/internal/registry"
 	"github.com/playkaro/game-engine/internal/session"
+	"github.com/playkaro/game-engine/internal/telemetry"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 func main() {
@@ -36,8 +39,17 @@ func main() {
 	gameHandler := handlers.NewGameHandler(sessionManager)
 	wsHandler := handlers.NewWebSocketHandler(sessionManager)
 
+	// Initialize OpenTelemetry
+	shutdown, err := telemetry.InitTracer("game-engine", "otel-collector:4317")
+	if err != nil {
+		log.Printf("Failed to initialize OpenTelemetry: %v", err)
+	} else {
+		defer shutdown(context.Background())
+	}
+
 	// Setup Router
 	r := gin.Default()
+	r.Use(otelgin.Middleware("game-engine"))
 
 	// CORS
 	r.Use(func(c *gin.Context) {
