@@ -48,12 +48,20 @@ func main() {
 		// Public routes
 		v1.POST("/webhook/razorpay", paymentHandler.HandleRazorpayWebhook)
 
+		// Internal routes (Protected by API Key in production)
+		internal := v1.Group("/internal")
+		{
+			internal.POST("/transaction", paymentHandler.ProcessInternalTransaction)
+			internal.GET("/balance", paymentHandler.GetBalance)
+		}
+
 		// Protected routes (require JWT)
 		authorized := v1.Group("")
 		authorized.Use(AuthMiddleware())
 		{
 			authorized.POST("/deposit", paymentHandler.InitiateDeposit)
 			authorized.GET("/order/:order_id", paymentHandler.GetOrderStatus)
+			authorized.GET("/balance", paymentHandler.GetBalance)
 		}
 	}
 

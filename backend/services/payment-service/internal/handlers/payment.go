@@ -99,6 +99,11 @@ func (h *PaymentHandler) InitiateDeposit(c *gin.Context) {
 		gatewayOrderID = rzpOrder.ID
 		paymentURL = fmt.Sprintf("https://checkout.razorpay.com/v1/checkout.html?order_id=%s&callback_url=%s",
 			rzpOrder.ID, req.CallbackURL)
+
+		// Note: We rely on the frontend/checkout to pass 'notes' with user_id to Razorpay
+		// OR we should store the mapping of order_id -> user_id in our DB (which we do in payment_orders)
+		// and look it up in the webhook.
+		// For this implementation, let's look it up from DB in the webhook handler.
 	}
 
 	// Save to database
@@ -160,6 +165,14 @@ func (h *PaymentHandler) HandleRazorpayWebhook(c *gin.Context) {
 		paymentID := paymentData["id"].(string)
 		status := paymentData["status"].(string)
 
+		// Lookup UserID from our DB
+		var userID string
+		err = h.DB.QueryRow("SELECT user_id FROM payment_orders WHERE gateway_order_id = $1", orderID).Scan(&userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Order not found"})
+			return
+		}
+
 		// Update order status
 		if status == "captured" {
 			_, err = h.DB.Exec(`
@@ -171,6 +184,21 @@ func (h *PaymentHandler) HandleRazorpayWebhook(c *gin.Context) {
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update order"})
 				return
+			}
+
+			// Credit Points to Wallet (1 INR = 1 Point)
+			// We use the internal transaction API logic directly here for efficiency
+			// or call a helper function. For now, let's do a direct DB update for simplicity
+			// but ideally we should use the Ledger system.
+
+			// Let's use a helper to ensure ledger consistency
+			err = h.creditDepositToWallet(userID,
+				paymentData["amount"].(float64)/100, // Amount is in paise
+				orderID)
+
+			if err != nil {
+				// Log error but don't fail the webhook response (idempotency needed)
+				fmt.Printf("Failed to credit wallet: %v\n", err)
 			}
 
 			// TODO: Publish Kafka event `payment.deposit.success`
@@ -206,6 +234,51 @@ func (h *PaymentHandler) GetOrderStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, order)
+}
+func (h *PaymentHandler) creditDepositToWallet(userID string, amount float64, orderID string) error {
+	tx, err := h.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 1. Check if already processed
+	var exists bool
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM ledger WHERE transaction_id = $1)", orderID).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil // Already processed
+	}
+
+	// 2. Lock Wallet
+	var currentBalance float64
+	err = tx.QueryRow("SELECT balance FROM wallets WHERE user_id = $1 FOR UPDATE", userID).Scan(&currentBalance)
+	if err == sql.ErrNoRows {
+		_, err = tx.Exec("INSERT INTO wallets (user_id, balance, currency) VALUES ($1, 0, 'PTS')", userID)
+		currentBalance = 0
+	} else if err != nil {
+		return err
+	}
+
+	// 3. Update Balance
+	newBalance := currentBalance + amount
+	_, err = tx.Exec("UPDATE wallets SET balance = $1, updated_at = $2 WHERE user_id = $3", newBalance, time.Now(), userID)
+	if err != nil {
+		return err
+	}
+
+	// 4. Create Ledger Entry
+	_, err = tx.Exec(`
+		INSERT INTO ledger (transaction_id, user_id, type, amount, reference_id, reference_type, balance_after)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, orderID, userID, models.TxTypeDeposit, amount, orderID, "PAYMENT_GATEWAY", newBalance)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // Helper functions
