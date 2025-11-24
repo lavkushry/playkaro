@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/playkaro/backend/internal/db"
+	"github.com/playkaro/backend/internal/wallet"
 )
 
 type InitiateDepositRequest struct {
@@ -44,6 +45,8 @@ func InitiateDeposit(c *gin.Context) {
 		return
 	}
 
+	service := wallet.NewService(db.DB, db.RDB)
+
 	// Create transaction record
 	var txnID string
 	err := db.DB.QueryRow(
@@ -64,14 +67,7 @@ func InitiateDeposit(c *gin.Context) {
 		orderID := "mock_" + txnID
 		db.DB.Exec("UPDATE payment_transactions SET order_id=$1, status='SUCCESS' WHERE id=$2", orderID, txnID)
 
-		// Credit wallet
-		db.DB.Exec("UPDATE wallets SET balance = balance + $1 WHERE user_id = $2", req.Amount, userID)
-
-		// Record transaction
-		db.DB.Exec(
-			"INSERT INTO transactions (wallet_id, type, amount, status, reference_id) SELECT id, 'DEPOSIT', $1, 'COMPLETED', $2 FROM wallets WHERE user_id=$3",
-			req.Amount, "DEP-"+orderID, userID,
-		)
+		service.Deposit(c.Request.Context(), userID, req.Amount, orderID)
 
 		c.JSON(http.StatusOK, gin.H{
 			"transaction_id": txnID,
@@ -129,14 +125,8 @@ func RazorpayWebhook(c *gin.Context) {
 		).Scan(&userID)
 
 		if err == nil {
-			// Credit user wallet
-			db.DB.Exec("UPDATE wallets SET balance = balance + $1 WHERE user_id = $2", amount, userID)
-
-			// Record transaction
-			db.DB.Exec(
-				"INSERT INTO transactions (wallet_id, type, amount, status, reference_id) SELECT id, 'DEPOSIT', $1, 'COMPLETED', $2 FROM wallets WHERE user_id=$3",
-				amount, "DEP-"+orderID, userID,
-			)
+			service := wallet.NewService(db.DB, db.RDB)
+			service.Deposit(c.Request.Context(), userID, amount, orderID)
 		}
 	}
 
@@ -165,15 +155,6 @@ func InitiateWithdrawal(c *gin.Context) {
 		return
 	}
 
-	// Check balance
-	var balance float64
-	db.DB.QueryRow("SELECT balance FROM wallets WHERE user_id=$1", userID).Scan(&balance)
-
-	if balance < req.Amount {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Insufficient balance"})
-		return
-	}
-
 	// Create withdrawal request (PENDING approval)
 	var txnID string
 	db.DB.QueryRow(
@@ -182,7 +163,11 @@ func InitiateWithdrawal(c *gin.Context) {
 	).Scan(&txnID)
 
 	// Deduct balance (held until approved)
-	db.DB.Exec("UPDATE wallets SET balance = balance - $1 WHERE user_id = $2", req.Amount, userID)
+	service := wallet.NewService(db.DB, db.RDB)
+	if _, err := service.Withdraw(c.Request.Context(), userID, req.Amount, "PAYOUT-"+txnID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"transaction_id": txnID,

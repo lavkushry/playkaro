@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/playkaro/backend/internal/db"
+	"github.com/playkaro/backend/internal/wallet"
 )
 
 // Seamless Wallet API - Standard callbacks for game providers
@@ -26,16 +27,17 @@ func GetBalanceForProvider(c *gin.Context) {
 		return
 	}
 
-	var balance float64
-	err := db.DB.QueryRow("SELECT balance FROM wallets WHERE user_id=$1", req.UserID).Scan(&balance)
+	service := wallet.NewService(db.DB, db.RDB)
+	w, err := service.Get(c.Request.Context(), req.UserID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
+	w.Balance = w.DepositBalance + w.BonusBalance + w.WinningsBalance - w.LockedBalance
 
 	c.JSON(http.StatusOK, gin.H{
 		"user_id":  req.UserID,
-		"balance":  balance,
+		"balance":  w.Balance,
 		"currency": "INR",
 	})
 }
@@ -48,48 +50,22 @@ func DebitWallet(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
+	service := wallet.NewService(db.DB, db.RDB)
+	w, err := service.LockForBet(c.Request.Context(), req.UserID, req.Amount, "GAME-"+req.RoundID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction error"})
-		return
-	}
-	defer tx.Rollback()
-
-	// Check balance
-	var balance float64
-	err = tx.QueryRow("SELECT balance FROM wallets WHERE user_id=$1", req.UserID).Scan(&balance)
-	if err != nil || balance < req.Amount {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Insufficient balance"})
-		return
-	}
-
-	// Deduct balance
-	_, err = tx.Exec("UPDATE wallets SET balance = balance - $1 WHERE user_id=$2", req.Amount, req.UserID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to debit"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Record game round
-	tx.Exec(
+	db.DB.Exec(
 		"INSERT INTO game_rounds (session_id, round_id, bet, status) VALUES ($1, $2, $3, 'PENDING')",
 		req.GameID+"-"+req.UserID, req.RoundID, req.Amount,
 	)
 
-	// Record transaction
-	tx.Exec(
-		"INSERT INTO transactions (wallet_id, type, amount, status, reference_id) SELECT id, 'BET', $1, 'COMPLETED', $2 FROM wallets WHERE user_id=$3",
-		req.Amount, "GAME-"+req.RoundID, req.UserID,
-	)
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
-		return
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"user_id":        req.UserID,
-		"new_balance":    balance - req.Amount,
+		"new_balance":    w.DepositBalance + w.BonusBalance + w.WinningsBalance - w.LockedBalance,
 		"transaction_id": req.RoundID,
 	})
 }
@@ -102,42 +78,25 @@ func CreditWallet(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
+	var betAmount float64
+	db.DB.QueryRow("SELECT bet FROM game_rounds WHERE round_id=$1", req.RoundID).Scan(&betAmount)
+	if betAmount == 0 {
+		betAmount = req.Amount
+	}
+
+	service := wallet.NewService(db.DB, db.RDB)
+	payout := betAmount + req.Amount
+	w, err := service.SettleBet(c.Request.Context(), req.UserID, betAmount, payout, true, "GAME-WIN-"+req.RoundID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction error"})
-		return
-	}
-	defer tx.Rollback()
-
-	// Add balance
-	var newBalance float64
-	err = tx.QueryRow(
-		"UPDATE wallets SET balance = balance + $1 WHERE user_id=$2 RETURNING balance",
-		req.Amount, req.UserID,
-	).Scan(&newBalance)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to credit"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Update game round
-	tx.Exec("UPDATE game_rounds SET win=$1, status='COMPLETED' WHERE round_id=$2", req.Amount, req.RoundID)
-
-	// Record transaction
-	tx.Exec(
-		"INSERT INTO transactions (wallet_id, type, amount, status, reference_id) SELECT id, 'WIN', $1, 'COMPLETED', $2 FROM wallets WHERE user_id=$3",
-		req.Amount, "GAME-WIN-"+req.RoundID, req.UserID,
-	)
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
-		return
-	}
+	db.DB.Exec("UPDATE game_rounds SET win=$1, status='COMPLETED' WHERE round_id=$2", req.Amount, req.RoundID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"user_id":        req.UserID,
-		"new_balance":    newBalance,
+		"new_balance":    w.DepositBalance + w.BonusBalance + w.WinningsBalance - w.LockedBalance,
 		"transaction_id": req.RoundID,
 	})
 }
@@ -150,44 +109,24 @@ func RollbackWallet(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction error"})
-		return
-	}
-	defer tx.Rollback()
-
-	// Get original bet amount
 	var betAmount float64
-	err = tx.QueryRow("SELECT bet FROM game_rounds WHERE round_id=$1", req.RoundID).Scan(&betAmount)
-	if err != nil {
+	if err := db.DB.QueryRow("SELECT bet FROM game_rounds WHERE round_id=$1", req.RoundID).Scan(&betAmount); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Round not found"})
 		return
 	}
 
-	// Refund balance
-	var newBalance float64
-	err = tx.QueryRow(
-		"UPDATE wallets SET balance = balance + $1 WHERE user_id=$2 RETURNING balance",
-		betAmount, req.UserID,
-	).Scan(&newBalance)
-
+	service := wallet.NewService(db.DB, db.RDB)
+	w, err := service.SettleBet(c.Request.Context(), req.UserID, betAmount, betAmount, true, "GAME-ROLLBACK-"+req.RoundID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to rollback"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Mark round as cancelled
-	tx.Exec("UPDATE game_rounds SET status='CANCELLED' WHERE round_id=$1", req.RoundID)
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
-		return
-	}
+	db.DB.Exec("UPDATE game_rounds SET status='CANCELLED' WHERE round_id=$1", req.RoundID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"user_id":     req.UserID,
-		"new_balance": newBalance,
+		"new_balance": w.DepositBalance + w.BonusBalance + w.WinningsBalance - w.LockedBalance,
 		"refunded":    betAmount,
 	})
 }
@@ -204,7 +143,11 @@ func LaunchGame(c *gin.Context) {
 
 	// Get user balance
 	var balance float64
-	db.DB.QueryRow("SELECT balance FROM wallets WHERE user_id=$1", userID).Scan(&balance)
+	service := wallet.NewService(db.DB, db.RDB)
+	w, _ := service.Get(c.Request.Context(), userID)
+	if w != nil {
+		balance = w.DepositBalance + w.BonusBalance + w.WinningsBalance - w.LockedBalance
+	}
 
 	// Create game session
 	var sessionID string

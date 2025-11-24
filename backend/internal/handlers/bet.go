@@ -8,6 +8,7 @@ import (
 
 	"github.com/playkaro/backend/internal/db"
 	"github.com/playkaro/backend/internal/models"
+	"github.com/playkaro/backend/internal/wallet"
 )
 
 type PlaceBetRequest struct {
@@ -44,31 +45,28 @@ func PlaceBet(c *gin.Context) {
 		return
 	}
 
+	service := wallet.NewService(db.DB, db.RDB)
+	lockRef := "BET-" + time.Now().Format("20060102150405")
+	if _, err := service.LockForBet(c.Request.Context(), userID, req.Amount, lockRef); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	tx, err := db.DB.Begin()
 	if err != nil {
+		// unlock if bet creation fails
+		service.SettleBet(c.Request.Context(), userID, req.Amount, 0, false, lockRef)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction error"})
 		return
 	}
 	defer tx.Rollback()
 
-	// 1. Get Wallet & Check Balance
-	var walletID string
-	var balance float64
-	err = tx.QueryRow("SELECT id, balance FROM wallets WHERE user_id=$1 FOR UPDATE", userID).Scan(&walletID, &balance)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Wallet not found"})
-		return
-	}
-	if balance < req.Amount {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Insufficient balance"})
-		return
-	}
-
-	// 2. Get Match & Odds
+	// Get Match & Odds
 	var odds float64
 	var oddsA, oddsB float64
 	err = tx.QueryRow("SELECT odds_a, odds_b FROM matches WHERE id=$1", req.MatchID).Scan(&oddsA, &oddsB)
 	if err != nil {
+		service.SettleBet(c.Request.Context(), userID, req.Amount, 0, false, lockRef)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Match not found"})
 		return
 	}
@@ -78,35 +76,22 @@ func PlaceBet(c *gin.Context) {
 		odds = oddsB
 	}
 
-	// 3. Deduct Balance
-	newBalance := balance - req.Amount
-	_, err = tx.Exec("UPDATE wallets SET balance=$1 WHERE id=$2", newBalance, walletID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update balance"})
-		return
-	}
-
-	// 4. Create Bet
 	potentialWin := req.Amount * odds
 	_, err = tx.Exec(
 		"INSERT INTO bets (user_id, match_id, selection, amount, odds, potential_win, status) VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')",
 		userID, req.MatchID, req.Selection, req.Amount, odds, potentialWin,
 	)
 	if err != nil {
+		service.SettleBet(c.Request.Context(), userID, req.Amount, 0, false, lockRef)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to place bet"})
 		return
 	}
 
-	// 5. Record Transaction
-	_, err = tx.Exec(
-		"INSERT INTO transactions (wallet_id, type, amount, status, reference_id) VALUES ($1, 'BET', $2, 'COMPLETED', $3)",
-		walletID, req.Amount, "BET-"+time.Now().Format("20060102150405"),
-	)
-
 	if err := tx.Commit(); err != nil {
+		service.SettleBet(c.Request.Context(), userID, req.Amount, 0, false, lockRef)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Bet placed successfully", "new_balance": newBalance})
+	c.JSON(http.StatusOK, gin.H{"message": "Bet placed successfully"})
 }

@@ -75,7 +75,7 @@ func (r *mutationResolver) Register(ctx context.Context, username string, email 
 	}
 
 	// Create wallet
-	db.DB.Exec("INSERT INTO wallets (user_id, balance, currency) VALUES ($1, 0, 'INR')", id)
+	db.DB.Exec("INSERT INTO wallets (user_id, currency) VALUES ($1, 'INR')", id)
 
 	token, _ := auth.GenerateToken(id)
 

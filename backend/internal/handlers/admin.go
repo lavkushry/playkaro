@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/playkaro/backend/internal/db"
 	"github.com/playkaro/backend/internal/realtime"
+	"github.com/playkaro/backend/internal/wallet"
 )
 
 type CreateMatchRequest struct {
@@ -82,66 +83,46 @@ func SettleMatch(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction error"})
-		return
-	}
-	defer tx.Rollback()
-
-	// 1. Update match status
-	_, err = tx.Exec("UPDATE matches SET status='FINISHED' WHERE id=$1", matchID)
+	_, err := db.DB.Exec("UPDATE matches SET status='FINISHED' WHERE id=$1", matchID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update match"})
 		return
 	}
 
-	// 2. Get all bets for this match
-	rows, err := tx.Query("SELECT id, user_id, selection, potential_win FROM bets WHERE match_id=$1 AND status='PENDING'", matchID)
+	rows, err := db.DB.Query("SELECT id, user_id, selection, amount, potential_win FROM bets WHERE match_id=$1 AND status='PENDING'", matchID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get bets"})
 		return
 	}
 	defer rows.Close()
 
+	service := wallet.NewService(db.DB, db.RDB)
 	var totalPaid float64
 	for rows.Next() {
 		var betID, userID, selection string
-		var potentialWin float64
-		rows.Scan(&betID, &userID, &selection, &potentialWin)
+		var amount, potentialWin float64
+		if err := rows.Scan(&betID, &userID, &selection, &amount, &potentialWin); err != nil {
+			continue
+		}
 
 		if selection == req.Winner {
-			// Winning bet - pay out
-			_, err = tx.Exec("UPDATE bets SET status='WON' WHERE id=$1", betID)
+			_, err = db.DB.Exec("UPDATE bets SET status='WON' WHERE id=$1", betID)
 			if err != nil {
 				continue
 			}
 
-			// Credit wallet
-			_, err = tx.Exec(
-				"UPDATE wallets SET balance = balance + $1, updated_at=$2 WHERE user_id=$3",
-				potentialWin, time.Now(), userID,
-			)
-			if err != nil {
+			if _, err := service.SettleBet(c.Request.Context(), userID, amount, potentialWin, true, "WIN-"+betID); err != nil {
 				continue
 			}
-
-			// Record transaction
-			tx.Exec(
-				"INSERT INTO transactions (wallet_id, type, amount, status, reference_id) SELECT id, 'WIN', $1, 'COMPLETED', $2 FROM wallets WHERE user_id=$3",
-				potentialWin, "WIN-"+betID, userID,
-			)
 
 			totalPaid += potentialWin
 		} else {
-			// Losing bet
-			_, err = tx.Exec("UPDATE bets SET status='LOST' WHERE id=$1", betID)
+			_, err = db.DB.Exec("UPDATE bets SET status='LOST' WHERE id=$1", betID)
+			if err != nil {
+				continue
+			}
+			service.SettleBet(c.Request.Context(), userID, amount, 0, false, "LOSE-"+betID)
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit error"})
-		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Match settled", "total_paid": totalPaid})

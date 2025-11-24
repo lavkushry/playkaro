@@ -100,7 +100,7 @@ func ClaimBonus(c *gin.Context) {
 	}
 
 	// Add bonus to wallet
-	db.DB.Exec("UPDATE wallets SET bonus = bonus + $1 WHERE user_id=$2", amount, userID)
+	db.DB.Exec("UPDATE wallets SET bonus_balance = bonus_balance + $1 WHERE user_id=$2", amount, userID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":              "Bonus claimed successfully",
@@ -172,14 +172,14 @@ func ApplyReferralCode(c *gin.Context) {
 	tx.Exec("UPDATE referrals SET referred_id=$1, bonus_awarded=$2 WHERE code=$3", userID, bonusAmount, req.ReferralCode)
 
 	// Give bonus to referrer
-	tx.Exec("UPDATE wallets SET bonus = bonus + $1 WHERE user_id=$2", bonusAmount, referrerID)
+	tx.Exec("UPDATE wallets SET bonus_balance = bonus_balance + $1 WHERE user_id=$2", bonusAmount, referrerID)
 	tx.Exec(`
 		INSERT INTO bonuses (user_id, type, amount, wagering_requirement, wagered, status, expires_at)
 		VALUES ($1, 'REFERRAL', $2, $3, 0, 'ACTIVE', $4)
 	`, referrerID, bonusAmount, bonusAmount*3, time.Now().Add(30*24*time.Hour))
 
 	// Give bonus to referred user
-	tx.Exec("UPDATE wallets SET bonus = bonus + $1 WHERE user_id=$2", bonusAmount, userID)
+	tx.Exec("UPDATE wallets SET bonus_balance = bonus_balance + $1 WHERE user_id=$2", bonusAmount, userID)
 	tx.Exec(`
 		INSERT INTO bonuses (user_id, type, amount, wagering_requirement, wagered, status, expires_at)
 		VALUES ($1, 'REFERRAL', $2, $3, 0, 'ACTIVE', $4)

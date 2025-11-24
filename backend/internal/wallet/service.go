@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/playkaro/backend/internal/db"
 	"github.com/playkaro/backend/internal/models"
 	"github.com/redis/go-redis/v9"
 )
