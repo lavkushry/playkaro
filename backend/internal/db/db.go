@@ -53,10 +53,23 @@ func InitSchema() {
 	CREATE TABLE IF NOT EXISTS wallets (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-		balance DECIMAL(15, 2) DEFAULT 0.00,
+		deposit_balance DECIMAL(15, 2) DEFAULT 0.00,
+		bonus_balance DECIMAL(15, 2) DEFAULT 0.00,
+		winnings_balance DECIMAL(15, 2) DEFAULT 0.00,
+		locked_balance DECIMAL(15, 2) DEFAULT 0.00,
 		currency VARCHAR(3) DEFAULT 'INR',
+		kyc_level INT DEFAULT 0,
+		daily_deposit_used DECIMAL(15, 2) DEFAULT 0.00,
+		last_deposit_reset TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		status VARCHAR(20) DEFAULT 'ACTIVE',
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		CONSTRAINT unique_user_wallet UNIQUE (user_id)
+		CONSTRAINT unique_user_wallet UNIQUE (user_id),
+		CONSTRAINT wallet_positive CHECK (
+			deposit_balance >= 0 AND
+			bonus_balance >= 0 AND
+			winnings_balance >= 0 AND
+			locked_balance >= 0
+		)
 	);
 
 	CREATE TABLE IF NOT EXISTS transactions (
@@ -66,6 +79,7 @@ func InitSchema() {
 		amount DECIMAL(15, 2) NOT NULL,
 		status VARCHAR(20) DEFAULT 'PENDING',
 		reference_id VARCHAR(100),
+		bucket VARCHAR(20) DEFAULT 'deposit',
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
@@ -186,7 +200,6 @@ func InitSchema() {
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
-	ALTER TABLE wallets ADD COLUMN IF NOT EXISTS bonus DECIMAL(15, 2) DEFAULT 0;
 	`
 
 	_, err := DB.Exec(schema)
