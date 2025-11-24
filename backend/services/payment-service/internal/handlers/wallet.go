@@ -19,7 +19,7 @@ type TransactionRequest struct {
 	ReferenceType string  `json:"reference_type" binding:"required"`
 }
 
-// GetBalance returns the current balance
+// GetBalance returns the current balance with multi-currency breakdown
 func (h *PaymentHandler) GetBalance(c *gin.Context) {
 	userID := c.GetString("userID")
 	if userID == "" {
@@ -27,18 +27,40 @@ func (h *PaymentHandler) GetBalance(c *gin.Context) {
 		userID = c.Query("user_id")
 	}
 
-	var balance float64
-	err := h.DB.QueryRow("SELECT balance FROM wallets WHERE user_id = $1", userID).Scan(&balance)
+	var wallet models.Wallet
+	err := h.DB.QueryRow(`
+		SELECT user_id, balance, deposit_balance, bonus_balance, winnings_balance, currency, updated_at
+		FROM wallets WHERE user_id = $1
+	`, userID).Scan(&wallet.UserID, &wallet.Balance, &wallet.DepositBalance,
+		&wallet.BonusBalance, &wallet.WinningsBalance, &wallet.Currency, &wallet.UpdatedAt)
+
 	if err == sql.ErrNoRows {
 		// Create wallet if not exists
-		h.DB.Exec("INSERT INTO wallets (user_id, balance) VALUES ($1, 0)", userID)
-		balance = 0
+		h.DB.Exec(`
+			INSERT INTO wallets (user_id, balance, deposit_balance, bonus_balance, winnings_balance, currency)
+			VALUES ($1, 0, 0, 0, 0, 'PTS')
+		`, userID)
+		wallet = models.Wallet{
+			UserID: userID,
+			Balance: 0,
+			DepositBalance: 0,
+			BonusBalance: 0,
+			WinningsBalance: 0,
+			Currency: "PTS",
+		}
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"user_id": userID, "balance": balance})
+	c.JSON(http.StatusOK, gin.H{
+		"user_id": wallet.UserID,
+		"total_balance": wallet.Balance,
+		"deposit_balance": wallet.DepositBalance,
+		"bonus_balance": wallet.BonusBalance,
+		"winnings_balance": wallet.WinningsBalance,
+		"currency": wallet.Currency,
+	})
 }
 
 // ProcessInternalTransaction handles debits/credits from other services

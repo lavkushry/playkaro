@@ -50,7 +50,6 @@ func (s *BonusService) GrantBonus(userID string, amount float64, expiryDays int)
 	} else {
 		// Update existing wallet
 		newBonusBalance := currentBonus + amount
-		newTotalBalance := newBonusBalance // Recalculate total (simplified, should add deposit + winnings too)
 		_, err = tx.Exec(`
 			UPDATE wallets
 			SET bonus_balance = $1, balance = balance + $2, updated_at = $3
