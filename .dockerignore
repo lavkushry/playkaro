@@ -1,0 +1,13 @@
+.git
+.gitignore
+.gocache
+node_modules
+frontend/node_modules
+frontend/dist
+backend/.gocache
+backend/tests/e2e
+*.log
+*.tmp
+*.swp
+Dockerfile
+.DS_Store
