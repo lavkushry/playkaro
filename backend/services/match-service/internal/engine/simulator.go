@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"math/rand"
 	"time"
@@ -91,17 +91,5 @@ func (s *MatchSimulator) simulateBall() {
 }
 
 func (s *MatchSimulator) broadcastUpdate() {
-	update := map[string]interface{}{
-		"match_id":  s.MatchID,
-		"score":     fmt.Sprintf("%d/%d", s.ScoreA, s.WicketsA),
-		"event":     "BALL_BOWLED",
-		"odds": map[string]float64{
-			s.TeamA: s.OddsA,
-			s.TeamB: s.OddsB,
-		},
-		"timestamp": time.Now(),
-	}
-
-	payload, _ := json.Marshal(update)
-	s.Cache.PublishOddsUpdate(string(payload))
+	s.Cache.PublishOddsUpdate(context.Background(), s.MatchID, s.OddsA, s.OddsB, 0)
 }

@@ -123,7 +123,9 @@ services:
       - "14268:14268" # Collector
       - "4317:4317"   # OTLP gRPC
     networks:
-      - playkaro-net
+      playkaro-net:
+        aliases:
+          - otel-collector
 
 volumes:
   postgres_data:

@@ -23,7 +23,8 @@ func NewLeaderboardService(redisURL string) (*LeaderboardService, error) {
 // UpdateScore adds points to a user's score (Weekly Leaderboard)
 func (s *LeaderboardService) UpdateScore(userID string, points float64) error {
 	ctx := context.Background()
-	key := fmt.Sprintf("leaderboard:weekly:%d", time.Now().ISOWeek())
+	_, week := time.Now().ISOWeek()
+	key := fmt.Sprintf("leaderboard:weekly:%d", week)
 
 	return s.Redis.ZIncrBy(ctx, key, points, userID).Err()
 }
@@ -31,7 +32,8 @@ func (s *LeaderboardService) UpdateScore(userID string, points float64) error {
 // GetTopPlayers returns the top N players
 func (s *LeaderboardService) GetTopPlayers(limit int64) ([]map[string]interface{}, error) {
 	ctx := context.Background()
-	key := fmt.Sprintf("leaderboard:weekly:%d", time.Now().ISOWeek())
+	_, week := time.Now().ISOWeek()
+	key := fmt.Sprintf("leaderboard:weekly:%d", week)
 
 	// Get top users with scores
 	results, err := s.Redis.ZRevRangeWithScores(ctx, key, 0, limit-1).Result()
