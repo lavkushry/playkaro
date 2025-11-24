@@ -1,16 +1,38 @@
-# React + Vite
+# PlayKaro Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite + Tailwind UI for the PlayKaro sportsbook, casino launcher, wallet, and admin tools.
 
-Currently, two official plugins are available:
+## Prerequisites
+- Node.js 18+
+- Backend API reachable at `http://localhost:8080` (default). The API base URLs are hard-coded; update the files listed below if you host the backend elsewhere.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Run
+```bash
+npm install
+npm run dev      # start on :5173
+npm run build    # production build
+npm run preview  # serve the built app locally
+npm run lint     # eslint
+```
 
-## React Compiler
+## API Endpoints Used by the UI
+- REST base: `http://localhost:8080/api/v1` in `src/store/useAuthStore.js`, `src/store/useWalletStore.js`, `src/store/useBetStore.js`.
+- GraphQL: `http://localhost:8080/query` in `src/apolloClient.js`.
+- WebSocket: `ws://localhost:8080/ws` inside `useBetStore` for live odds and chat.
+Update those constants if you change the backend host/port.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Screens & Features
+- **Auth**: Login/Register forms with JWT storage in `localStorage`.
+- **Dashboard**: Balance widget, promotion carousel, quick actions.
+- **Sportsbook**: Live matches, bet slip with amount/odds, WebSocket odds updates.
+- **Admin**: Manage matches/odds/settlement (requires admin flag in DB).
+- **Wallet**: Deposit/withdraw UI with optimistic updates.
+- **KYC**: Upload documents and view status.
+- **Casino**: Catalog of seeded games and launch links.
+- **Promotions/Leaderboard/Analytics**: Bonus claims, referrals, and leaderboard views.
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Code Pointers
+- State stores: `src/store` (auth, wallet, bets).
+- GraphQL operations: `src/graphql/queries.js`.
+- Global styles/theme: `src/index.css`, `src/App.css`.
+- Shared UI components: `src/components/ui`.

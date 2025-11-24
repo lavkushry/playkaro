@@ -26,6 +26,7 @@ type Match struct {
 	League    string    `json:"league" db:"league"`
 	Venue     string    `json:"venue" db:"venue"`
 	Result    *string   `json:"result,omitempty" db:"result"`
+	Version   int       `json:"version" db:"version"` // For optimistic locking
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
