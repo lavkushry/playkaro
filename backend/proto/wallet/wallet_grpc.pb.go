@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v6.33.1
-// source: proto/wallet/wallet.proto
+// source: backend/proto/wallet/wallet.proto
 
 package wallet
 
@@ -22,6 +22,8 @@ const (
 	WalletService_GetBalance_FullMethodName = "/wallet.WalletService/GetBalance"
 	WalletService_Deposit_FullMethodName    = "/wallet.WalletService/Deposit"
 	WalletService_Withdraw_FullMethodName   = "/wallet.WalletService/Withdraw"
+	WalletService_Debit_FullMethodName      = "/wallet.WalletService/Debit"
+	WalletService_Credit_FullMethodName     = "/wallet.WalletService/Credit"
 )
 
 // WalletServiceClient is the client API for WalletService service.
@@ -31,6 +33,8 @@ type WalletServiceClient interface {
 	GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error)
 	Deposit(ctx context.Context, in *DepositRequest, opts ...grpc.CallOption) (*DepositResponse, error)
 	Withdraw(ctx context.Context, in *WithdrawRequest, opts ...grpc.CallOption) (*WithdrawResponse, error)
+	Debit(ctx context.Context, in *DebitRequest, opts ...grpc.CallOption) (*DebitResponse, error)
+	Credit(ctx context.Context, in *CreditRequest, opts ...grpc.CallOption) (*CreditResponse, error)
 }
 
 type walletServiceClient struct {
@@ -71,6 +75,26 @@ func (c *walletServiceClient) Withdraw(ctx context.Context, in *WithdrawRequest,
 	return out, nil
 }
 
+func (c *walletServiceClient) Debit(ctx context.Context, in *DebitRequest, opts ...grpc.CallOption) (*DebitResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DebitResponse)
+	err := c.cc.Invoke(ctx, WalletService_Debit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletServiceClient) Credit(ctx context.Context, in *CreditRequest, opts ...grpc.CallOption) (*CreditResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreditResponse)
+	err := c.cc.Invoke(ctx, WalletService_Credit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WalletServiceServer is the server API for WalletService service.
 // All implementations must embed UnimplementedWalletServiceServer
 // for forward compatibility.
@@ -78,6 +102,8 @@ type WalletServiceServer interface {
 	GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error)
 	Deposit(context.Context, *DepositRequest) (*DepositResponse, error)
 	Withdraw(context.Context, *WithdrawRequest) (*WithdrawResponse, error)
+	Debit(context.Context, *DebitRequest) (*DebitResponse, error)
+	Credit(context.Context, *CreditRequest) (*CreditResponse, error)
 	mustEmbedUnimplementedWalletServiceServer()
 }
 
@@ -96,6 +122,12 @@ func (UnimplementedWalletServiceServer) Deposit(context.Context, *DepositRequest
 }
 func (UnimplementedWalletServiceServer) Withdraw(context.Context, *WithdrawRequest) (*WithdrawResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Withdraw not implemented")
+}
+func (UnimplementedWalletServiceServer) Debit(context.Context, *DebitRequest) (*DebitResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Debit not implemented")
+}
+func (UnimplementedWalletServiceServer) Credit(context.Context, *CreditRequest) (*CreditResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Credit not implemented")
 }
 func (UnimplementedWalletServiceServer) mustEmbedUnimplementedWalletServiceServer() {}
 func (UnimplementedWalletServiceServer) testEmbeddedByValue()                       {}
@@ -172,6 +204,42 @@ func _WalletService_Withdraw_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WalletService_Debit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DebitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletServiceServer).Debit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletService_Debit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletServiceServer).Debit(ctx, req.(*DebitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletService_Credit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreditRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletServiceServer).Credit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletService_Credit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletServiceServer).Credit(ctx, req.(*CreditRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WalletService_ServiceDesc is the grpc.ServiceDesc for WalletService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -191,7 +259,15 @@ var WalletService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Withdraw",
 			Handler:    _WalletService_Withdraw_Handler,
 		},
+		{
+			MethodName: "Debit",
+			Handler:    _WalletService_Debit_Handler,
+		},
+		{
+			MethodName: "Credit",
+			Handler:    _WalletService_Credit_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/wallet/wallet.proto",
+	Metadata: "backend/proto/wallet/wallet.proto",
 }

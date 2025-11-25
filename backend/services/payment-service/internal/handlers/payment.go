@@ -11,12 +11,14 @@ import (
 	"github.com/playkaro/payment-service/internal/fraud"
 	"github.com/playkaro/payment-service/internal/gateways/razorpay"
 	"github.com/playkaro/payment-service/internal/models"
+	"github.com/playkaro/payment-service/internal/wallet"
 )
 
 type PaymentHandler struct {
 	DB              *sql.DB
 	RazorpayClient  *razorpay.Client
 	FraudDetector   *fraud.Detector
+	WalletService   *wallet.Service
 }
 
 type DepositRequest struct {
@@ -33,11 +35,12 @@ type DepositResponse struct {
 	Status         string `json:"status"`
 }
 
-func NewPaymentHandler(db *sql.DB, razorpayClient *razorpay.Client) *PaymentHandler {
+func NewPaymentHandler(db *sql.DB, razorpayClient *razorpay.Client, walletService *wallet.Service) *PaymentHandler {
 	return &PaymentHandler{
 		DB:             db,
 		RazorpayClient: razorpayClient,
 		FraudDetector:  fraud.NewDetector(db),
+		WalletService:  walletService,
 	}
 }
 
@@ -236,49 +239,8 @@ func (h *PaymentHandler) GetOrderStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, order)
 }
 func (h *PaymentHandler) creditDepositToWallet(userID string, amount float64, orderID string) error {
-	tx, err := h.DB.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// 1. Check if already processed
-	var exists bool
-	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM ledger WHERE transaction_id = $1)", orderID).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return nil // Already processed
-	}
-
-	// 2. Lock Wallet
-	var currentBalance float64
-	err = tx.QueryRow("SELECT balance FROM wallets WHERE user_id = $1 FOR UPDATE", userID).Scan(&currentBalance)
-	if err == sql.ErrNoRows {
-		_, err = tx.Exec("INSERT INTO wallets (user_id, balance, currency) VALUES ($1, 0, 'PTS')", userID)
-		currentBalance = 0
-	} else if err != nil {
-		return err
-	}
-
-	// 3. Update Balance
-	newBalance := currentBalance + amount
-	_, err = tx.Exec("UPDATE wallets SET balance = $1, updated_at = $2 WHERE user_id = $3", newBalance, time.Now(), userID)
-	if err != nil {
-		return err
-	}
-
-	// 4. Create Ledger Entry
-	_, err = tx.Exec(`
-		INSERT INTO ledger (transaction_id, user_id, type, amount, reference_id, reference_type, balance_after)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, orderID, userID, models.TxTypeDeposit, amount, orderID, "PAYMENT_GATEWAY", newBalance)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit()
+	_, err := h.WalletService.Deposit(userID, amount, "PAYMENT_GATEWAY")
+	return err
 }
 
 // Helper functions

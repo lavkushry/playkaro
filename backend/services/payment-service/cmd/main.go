@@ -3,14 +3,20 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"google.golang.org/grpc"
+
+	pb "github.com/playkaro/backend/proto/wallet"
 	"github.com/playkaro/payment-service/internal/db"
 	"github.com/playkaro/payment-service/internal/gateways/razorpay"
+	grpc_impl "github.com/playkaro/payment-service/internal/grpc"
 	"github.com/playkaro/payment-service/internal/handlers"
 	"github.com/playkaro/payment-service/internal/telemetry"
+	"github.com/playkaro/payment-service/internal/wallet"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
@@ -83,9 +89,36 @@ func main() {
 		port = "8081"
 	}
 
-	log.Printf("Payment Service starting on port %s", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatal("Failed to start server:", err)
+	// Start HTTP server
+	go func() {
+		log.Printf("Payment Service HTTP starting on port %s", port)
+		if err := r.Run(":" + port); err != nil {
+			log.Fatal("Failed to start HTTP server:", err)
+		}
+	}()
+
+	// Start gRPC server
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "50051"
+	}
+
+	lis, err := net.Listen("tcp", ":"+grpcPort)
+	if err != nil {
+		log.Fatalf("Failed to listen on gRPC port %s: %v", grpcPort, err)
+	}
+
+	grpcServer := grpc.NewServer()
+
+	// Initialize Wallet Service (Business Logic)
+	walletService := wallet.NewService(db.DB)
+
+	// Register gRPC server
+	pb.RegisterWalletServiceServer(grpcServer, grpc_impl.NewWalletServer(walletService))
+
+	log.Printf("Payment Service gRPC starting on port %s", grpcPort)
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Fatalf("Failed to serve gRPC: %v", err)
 	}
 }
 

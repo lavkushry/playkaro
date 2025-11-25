@@ -8,6 +8,8 @@ service WalletService {
   rpc GetBalance (GetBalanceRequest) returns (GetBalanceResponse);
   rpc Deposit (DepositRequest) returns (DepositResponse);
   rpc Withdraw (WithdrawRequest) returns (WithdrawResponse);
+  rpc Debit (DebitRequest) returns (DebitResponse);
+  rpc Credit (CreditRequest) returns (CreditResponse);
 }
 
 message GetBalanceRequest {
@@ -40,6 +42,36 @@ message WithdrawRequest {
 }
 
 message WithdrawResponse {
+  bool success = 1;
+  string transaction_id = 2;
+  string message = 3;
+  double new_balance = 4;
+}
+
+message DebitRequest {
+  string user_id = 1;
+  double amount = 2;
+  string reference_id = 3; // e.g., match_id or game_id
+  string reference_type = 4; // e.g., "BET", "ENTRY_FEE"
+  string idempotency_key = 5;
+}
+
+message DebitResponse {
+  bool success = 1;
+  string transaction_id = 2;
+  string message = 3;
+  double new_balance = 4;
+}
+
+message CreditRequest {
+  string user_id = 1;
+  double amount = 2;
+  string reference_id = 3;
+  string reference_type = 4; // e.g., "WINNING", "REFUND"
+  string idempotency_key = 5;
+}
+
+message CreditResponse {
   bool success = 1;
   string transaction_id = 2;
   string message = 3;
