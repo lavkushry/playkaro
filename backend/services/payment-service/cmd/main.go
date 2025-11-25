@@ -40,8 +40,11 @@ func main() {
 	}
 	razorpayClient := razorpay.NewClient(razorpayKeyID, razorpayKeySecret)
 
+	// Initialize Wallet Service (Business Logic)
+	walletService := wallet.NewService(db.DB)
+
 	// Initialize handlers
-	paymentHandler := handlers.NewPaymentHandler(db.DB, razorpayClient)
+	paymentHandler := handlers.NewPaymentHandler(db.DB, razorpayClient, walletService)
 
 	// Initialize OpenTelemetry
 	shutdown, err := telemetry.InitTracer("payment-service", "otel-collector:4317")
@@ -109,9 +112,6 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-
-	// Initialize Wallet Service (Business Logic)
-	walletService := wallet.NewService(db.DB)
 
 	// Register gRPC server
 	pb.RegisterWalletServiceServer(grpcServer, grpc_impl.NewWalletServer(walletService))

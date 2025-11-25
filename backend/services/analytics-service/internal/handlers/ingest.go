@@ -31,7 +31,19 @@ func (h *IngestHandler) IngestEvent(c *gin.Context) {
 		return
 	}
 
-	event.ID = uuid.New().String()
+	if err := h.ProcessEvent(event); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{"id": event.ID})
+}
+
+// ProcessEvent handles the core logic of event ingestion
+func (h *IngestHandler) ProcessEvent(event models.AnalyticsEvent) error {
+	if event.ID == "" {
+		event.ID = uuid.New().String()
+	}
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
@@ -42,7 +54,7 @@ func (h *IngestHandler) IngestEvent(c *gin.Context) {
 	// 2. Update Real-time Metrics
 	go h.updateRealtimeMetrics(event)
 
-	c.JSON(http.StatusAccepted, gin.H{"id": event.ID})
+	return nil
 }
 
 func (h *IngestHandler) storeEvent(event models.AnalyticsEvent) {

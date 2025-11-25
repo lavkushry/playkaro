@@ -5,6 +5,7 @@ go 1.25.4
 require (
 	github.com/99designs/gqlgen v0.17.83
 	github.com/gin-gonic/gin v1.11.0
+	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1

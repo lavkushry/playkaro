@@ -4,12 +4,19 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
 	"os"
+
+	"net"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	_ "github.com/lib/pq"
+	"google.golang.org/grpc"
+
+	grpc_impl "github.com/playkaro/analytics-service/internal/grpc"
 	"github.com/playkaro/analytics-service/internal/handlers"
+	pb "github.com/playkaro/backend/proto/analytics"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
@@ -69,6 +76,32 @@ func main() {
 		port = "8005"
 	}
 
-	log.Printf("Analytics Service starting on port %s", port)
-	r.Run(":" + port)
+	// Start HTTP server
+	go func() {
+		log.Printf("Analytics Service HTTP starting on port %s", port)
+		if err := r.Run(":" + port); err != nil {
+			log.Fatal("Failed to start HTTP server:", err)
+		}
+	}()
+
+	// Start gRPC server
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "50052"
+	}
+
+	lis, err := net.Listen("tcp", ":"+grpcPort)
+	if err != nil {
+		log.Fatalf("Failed to listen on gRPC port %s: %v", grpcPort, err)
+	}
+
+	grpcServer := grpc.NewServer()
+
+	// Register gRPC server
+	pb.RegisterAnalyticsServiceServer(grpcServer, grpc_impl.NewAnalyticsServer(ingestHandler))
+
+	log.Printf("Analytics Service gRPC starting on port %s", grpcPort)
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Fatalf("Failed to serve gRPC: %v", err)
+	}
 }

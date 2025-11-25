@@ -1,12 +1,11 @@
 package handlers
 
 import (
-	"database/sql"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/playkaro/payment-service/internal/models"
+	"github.com/playkaro/payment-service/internal/wallet"
 )
 
 // TransactionRequest for internal microservice calls
@@ -27,39 +26,19 @@ func (h *PaymentHandler) GetBalance(c *gin.Context) {
 		userID = c.Query("user_id")
 	}
 
-	var wallet models.Wallet
-	err := h.DB.QueryRow(`
-		SELECT user_id, balance, deposit_balance, bonus_balance, winnings_balance, currency, updated_at
-		FROM wallets WHERE user_id = $1
-	`, userID).Scan(&wallet.UserID, &wallet.Balance, &wallet.DepositBalance,
-		&wallet.BonusBalance, &wallet.WinningsBalance, &wallet.Currency, &wallet.UpdatedAt)
-
-	if err == sql.ErrNoRows {
-		// Create wallet if not exists
-		h.DB.Exec(`
-			INSERT INTO wallets (user_id, balance, deposit_balance, bonus_balance, winnings_balance, currency)
-			VALUES ($1, 0, 0, 0, 0, 'PTS')
-		`, userID)
-		wallet = models.Wallet{
-			UserID: userID,
-			Balance: 0,
-			DepositBalance: 0,
-			BonusBalance: 0,
-			WinningsBalance: 0,
-			Currency: "PTS",
-		}
-	} else if err != nil {
+	balance, err := h.WalletService.GetBalance(userID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"user_id": wallet.UserID,
-		"total_balance": wallet.Balance,
-		"deposit_balance": wallet.DepositBalance,
-		"bonus_balance": wallet.BonusBalance,
-		"winnings_balance": wallet.WinningsBalance,
-		"currency": wallet.Currency,
+		"user_id":          userID,
+		"total_balance":    balance.Amount,
+		"deposit_balance":  balance.DepositBalance,
+		"bonus_balance":    balance.Bonus,
+		"winnings_balance": balance.WinningsBalance,
+		"currency":         balance.Currency,
 	})
 }
 
@@ -72,86 +51,27 @@ func (h *PaymentHandler) ProcessInternalTransaction(c *gin.Context) {
 		return
 	}
 
-	// Start Database Transaction
-	tx, err := h.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
-		return
-	}
-	defer tx.Rollback()
+	var err error
+	var result *wallet.TransactionResult
 
-	// 1. Check Idempotency (Has this transaction_id been processed?)
-	var exists bool
-	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM ledger WHERE transaction_id = $1)", req.TransactionID).Scan(&exists)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-	if exists {
-		c.JSON(http.StatusOK, gin.H{"status": "already_processed"})
-		return
-	}
-
-	// 2. Determine Amount (+ for Credit, - for Debit)
-	var finalAmount float64
 	if req.Type == models.TxTypeBet || req.Type == models.TxTypeWithdrawal {
-		finalAmount = -req.Amount
+		result, err = h.WalletService.Debit(req.UserID, req.Amount, req.ReferenceID, req.ReferenceType)
 	} else {
-		finalAmount = req.Amount
+		result, err = h.WalletService.Credit(req.UserID, req.Amount, req.ReferenceID, req.ReferenceType)
 	}
 
-	// 3. Lock Wallet Row & Update Balance
-	// "FOR UPDATE" locks the row to prevent race conditions
-	var currentBalance float64
-	err = tx.QueryRow(`
-		SELECT balance FROM wallets WHERE user_id = $1 FOR UPDATE
-	`, req.UserID).Scan(&currentBalance)
-
-	if err == sql.ErrNoRows {
-		// Create wallet if missing
-		_, err = tx.Exec("INSERT INTO wallets (user_id, balance) VALUES ($1, 0)", req.UserID)
-		currentBalance = 0
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock wallet"})
-		return
-	}
-
-	// 4. Check Sufficient Funds (for Debits)
-	if finalAmount < 0 && currentBalance+finalAmount < 0 {
-		c.JSON(http.StatusPaymentRequired, gin.H{"error": "Insufficient funds"})
-		return
-	}
-
-	newBalance := currentBalance + finalAmount
-
-	// 5. Update Wallet
-	_, err = tx.Exec(`
-		UPDATE wallets SET balance = $1, updated_at = $2 WHERE user_id = $3
-	`, newBalance, time.Now(), req.UserID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update balance"})
-		return
-	}
-
-	// 6. Insert Ledger Entry
-	_, err = tx.Exec(`
-		INSERT INTO ledger (transaction_id, user_id, type, amount, reference_id, reference_type, balance_after)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, req.TransactionID, req.UserID, req.Type, finalAmount, req.ReferenceID, req.ReferenceType, newBalance)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create ledger entry"})
-		return
-	}
-
-	// Commit Transaction
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		if err == wallet.ErrInsufficientFunds {
+			c.JSON(http.StatusPaymentRequired, gin.H{"error": "Insufficient funds"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"new_balance": newBalance,
-		"transaction_id": req.TransactionID,
+		"status":         "success",
+		"new_balance":    result.BalanceAfter,
+		"transaction_id": result.ID,
 	})
 }
