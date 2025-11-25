@@ -10,6 +10,7 @@ import (
 	"github.com/playkaro/game-engine/games/crash"
 	"github.com/playkaro/game-engine/games/dice"
 	"github.com/playkaro/game-engine/games/ludo"
+	grpc_client "github.com/playkaro/game-engine/internal/grpc"
 	"github.com/playkaro/game-engine/internal/handlers"
 	"github.com/playkaro/game-engine/internal/registry"
 	"github.com/playkaro/game-engine/internal/session"
@@ -35,8 +36,25 @@ func main() {
 	// Initialize Session Manager
 	sessionManager := session.NewSessionManager()
 
+	// Initialize gRPC Clients
+	walletAddr := os.Getenv("WALLET_SERVICE_ADDR")
+	if walletAddr == "" {
+		walletAddr = "localhost:50051"
+	}
+	analyticsAddr := os.Getenv("ANALYTICS_SERVICE_ADDR")
+	if analyticsAddr == "" {
+		analyticsAddr = "localhost:50052"
+	}
+
+	grpcClients, err := grpc_client.NewClients(walletAddr, analyticsAddr)
+	if err != nil {
+		log.Printf("Failed to connect to gRPC services: %v", err)
+		// Continue without gRPC for now, or fail fatal depending on requirement
+		// log.Fatal(err)
+	}
+
 	// Initialize Handlers
-	gameHandler := handlers.NewGameHandler(sessionManager)
+	gameHandler := handlers.NewGameHandler(sessionManager, grpcClients)
 	wsHandler := handlers.NewWebSocketHandler(sessionManager)
 
 	// Initialize OpenTelemetry

@@ -54,9 +54,35 @@ services:
       - PAYMENT_DB_PASSWORD=password
       - RAZORPAY_KEY_ID=test_key
       - RAZORPAY_KEY_SECRET=test_secret
+      - GRPC_PORT=50051
+    ports:
+      - "8081:8081"
+      - "50051:50051"
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - playkaro-net
+
+  analytics-service:
+    build: ./services/analytics-service
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - DB_NAME=playkaro_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - GRPC_PORT=50052
+    ports:
+      - "8005:8005"
+      - "50052:50052"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - playkaro-net
 
@@ -66,10 +92,16 @@ services:
       - MATCH_DB_HOST=postgres
       - MATCH_DB_PASSWORD=password
       - REDIS_URL=redis://redis:6379
+      - WALLET_SERVICE_ADDR=payment-service:50051
+      - ANALYTICS_SERVICE_ADDR=analytics-service:50052
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      analytics-service:
         condition: service_started
     networks:
       - playkaro-net
@@ -78,8 +110,14 @@ services:
     build: ./services/game-engine
     environment:
       - REDIS_URL=redis://redis:6379
+      - WALLET_SERVICE_ADDR=payment-service:50051
+      - ANALYTICS_SERVICE_ADDR=analytics-service:50052
     depends_on:
       redis:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      analytics-service:
         condition: service_started
     networks:
       - playkaro-net

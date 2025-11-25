@@ -3,5 +3,7 @@ go 1.25.4
 use (
 	.
 	./services/analytics-service
+	./services/game-engine
+	./services/match-service
 	./services/payment-service
 )

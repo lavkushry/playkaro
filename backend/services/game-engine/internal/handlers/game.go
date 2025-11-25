@@ -5,16 +5,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/playkaro/game-engine/internal/engine"
+	"github.com/playkaro/game-engine/internal/grpc"
 	"github.com/playkaro/game-engine/internal/registry"
 	"github.com/playkaro/game-engine/internal/session"
 )
 
 type GameHandler struct {
 	SessionManager *session.SessionManager
+	Clients        *grpc.Clients
 }
 
-func NewGameHandler(sm *session.SessionManager) *GameHandler {
-	return &GameHandler{SessionManager: sm}
+func NewGameHandler(sm *session.SessionManager, clients *grpc.Clients) *GameHandler {
+	return &GameHandler{
+		SessionManager: sm,
+		Clients:        clients,
+	}
 }
 
 // ListGames returns all available games

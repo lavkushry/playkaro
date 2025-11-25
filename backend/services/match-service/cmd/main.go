@@ -11,6 +11,7 @@ import (
 	"github.com/playkaro/match-service/internal/cache"
 	"github.com/playkaro/match-service/internal/db"
 	"github.com/playkaro/match-service/internal/engine"
+	grpc_client "github.com/playkaro/match-service/internal/grpc"
 	"github.com/playkaro/match-service/internal/handlers"
 	"github.com/playkaro/match-service/internal/telemetry"
 	"github.com/playkaro/match-service/internal/websocket"
@@ -40,8 +41,25 @@ func main() {
 		log.Fatal("Failed to connect to Redis:", err)
 	}
 
+	// Initialize gRPC Clients
+	walletAddr := os.Getenv("WALLET_SERVICE_ADDR")
+	if walletAddr == "" {
+		walletAddr = "localhost:50051"
+	}
+	analyticsAddr := os.Getenv("ANALYTICS_SERVICE_ADDR")
+	if analyticsAddr == "" {
+		analyticsAddr = "localhost:50052"
+	}
+
+	grpcClients, err := grpc_client.NewClients(walletAddr, analyticsAddr)
+	if err != nil {
+		log.Printf("Failed to connect to gRPC services: %v", err)
+		// Continue without gRPC for now, or fail fatal depending on requirement
+		// log.Fatal(err)
+	}
+
 	// Initialize handlers
-	matchHandler := handlers.NewMatchHandler(db.DB, matchCache)
+	matchHandler := handlers.NewMatchHandler(db.DB, matchCache, grpcClients)
 	oddsStreamHandler := websocket.NewOddsStreamHandler(matchCache)
 
 	// BEAST MODE: Start a Demo Match Simulator

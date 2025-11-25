@@ -9,12 +9,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/playkaro/match-service/internal/cache"
+	"github.com/playkaro/match-service/internal/grpc"
 	"github.com/playkaro/match-service/internal/models"
 )
 
 type MatchHandler struct {
-	DB    *sql.DB
-	Cache *cache.MatchCache
+	DB      *sql.DB
+	Cache   *cache.MatchCache
+	Clients *grpc.Clients
 }
 
 type CreateMatchRequest struct {
@@ -39,10 +41,11 @@ type SettleMatchRequest struct {
 	Result string `json:"result" binding:"required"`
 }
 
-func NewMatchHandler(db *sql.DB, cache *cache.MatchCache) *MatchHandler {
+func NewMatchHandler(db *sql.DB, cache *cache.MatchCache, clients *grpc.Clients) *MatchHandler {
 	return &MatchHandler{
-		DB:    db,
-		Cache: cache,
+		DB:      db,
+		Cache:   cache,
+		Clients: clients,
 	}
 }
 
